@@ -19,11 +19,12 @@ const BOOST_KEY_MAP: Record<StatKey, 'atk' | 'def' | 'spa' | 'spd' | 'spe'> = {
   s: 'spe',
 };
 
+// 「ゆき」天候の@pkmn/sim内部IDはGen9で snowscape（'snow'ではない。sim-enum-map.ts参照）。
 const WEATHER_ID: Record<NonNullable<BattleFieldState['weather']>, string> = {
   Sand: 'sandstorm',
   Sun: 'sunnyday',
   Rain: 'raindance',
-  Snow: 'snow',
+  Snow: 'snowscape',
 };
 
 const TERRAIN_ID: Record<NonNullable<BattleFieldState['terrain']>, string> = {
