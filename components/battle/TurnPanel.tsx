@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { moveJa } from '@/lib/data/move-ja';
 import { getMoveCategory } from '@/lib/engine/infer';
 import { HpValueInput } from './HpValueInput';
@@ -33,6 +33,8 @@ export function TurnPanel({
   oppParticipant,
   liveBench,
   remainingOpp,
+  selfParticipantsById,
+  oppParticipantsById,
   onAdvance,
 }: {
   turn: number;
@@ -44,6 +46,10 @@ export function TurnPanel({
   liveBench: PartyMember[];
   /** 相手の生存中の判明枠（交代先候補）。 */
   remainingOpp: OpponentSlot[];
+  /** 自分側メンバー全員のBattleParticipant（refId→状態）。交代先のHP%を参照するために使う。 */
+  selfParticipantsById: Record<string, BattleParticipant>;
+  /** 相手側メンバー全員のBattleParticipant（slotId→状態）。交代先のHP%を参照するために使う。 */
+  oppParticipantsById: Record<string, BattleParticipant>;
   onAdvance: (
     selfAction: TurnActionSpec,
     oppAction: TurnActionSpec,
@@ -101,6 +107,42 @@ export function TurnPanel({
   }, [oppActiveSlot, oppParticipant.choiceLockedMoveId]);
   const selfSwitchOptions: SwitchOption[] = liveBench.map((m) => ({ id: m.id, label: m.name }));
   const oppSwitchOptions: SwitchOption[] = remainingOpp.map((o) => ({ id: o.id, label: o.resolvedName ?? o.query }));
+
+  // 相手の技が実際に当たる自分側の対象: 自分が同ターンに交代を選んでいれば「交代後に場に出る控え」、
+  // そうでなければ現在のアクティブ。交代直後のポケモンのHP%/実数値を基準にHP入力欄を出すため。
+  const selfDamageTarget = useMemo(() => {
+    if (selfType === 'switch' && selfSwitchToId) {
+      const member = liveBench.find((m) => m.id === selfSwitchToId);
+      const participant = selfParticipantsById[selfSwitchToId];
+      if (member) {
+        return { name: member.name, maxHp: member.stats.h, hpPercent: participant?.currentHpPercent ?? 100, isSwitchIn: true };
+      }
+    }
+    return { name: selfActive.name, maxHp: selfActive.stats.h, hpPercent: selfParticipant.currentHpPercent, isSwitchIn: false };
+  }, [selfType, selfSwitchToId, liveBench, selfParticipantsById, selfActive, selfParticipant]);
+
+  // 自分の技が実際に当たる相手側の対象: 相手が同ターンに交代を選んでいれば「交代後に場に出る控え」。
+  const oppDamageTarget = useMemo(() => {
+    if (oppType === 'switch' && oppSwitchToId) {
+      const slot = remainingOpp.find((o) => o.id === oppSwitchToId);
+      const participant = oppParticipantsById[oppSwitchToId];
+      if (slot) {
+        return { name: slot.resolvedName ?? slot.query, hpPercent: participant?.currentHpPercent ?? 100, isSwitchIn: true };
+      }
+    }
+    return { name: oppActiveSlot.resolvedName ?? '相手', hpPercent: oppParticipant.currentHpPercent, isSwitchIn: false };
+  }, [oppType, oppSwitchToId, remainingOpp, oppParticipantsById, oppActiveSlot, oppParticipant]);
+
+  // 対象(交代先/アクティブ)が切り替わったら、結果HP入力のデフォルト値をその対象の現在HP%に合わせ直す
+  // （交代直後は基本満タンだが、瀕死一歩手前から控えに引っ込めていた個体等は既にダメージを負っている）。
+  useEffect(() => {
+    setOppHpAfter(selfDamageTarget.hpPercent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfType, selfSwitchToId]);
+  useEffect(() => {
+    setSelfHpAfter(oppDamageTarget.hpPercent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oppType, oppSwitchToId]);
 
   function resetForm() {
     setSelfType('move');
@@ -172,7 +214,7 @@ export function TurnPanel({
           hpAfter={selfHpAfter}
           onHpAfterChange={setSelfHpAfter}
           hpMaxHp={undefined}
-          hpLabel={`相手の結果HP（命中前${Math.round(oppParticipant.currentHpPercent)}%）`}
+          hpLabel={`${oppDamageTarget.name}${oppDamageTarget.isSwitchIn ? '（交代後）' : ''}の結果HP（命中前${Math.round(oppDamageTarget.hpPercent)}%）`}
           secondary={selfSecondary}
           onSecondaryChange={setSelfSecondary}
           switchOptions={selfSwitchOptions}
@@ -197,8 +239,8 @@ export function TurnPanel({
           onCritChange={setOppCrit}
           hpAfter={oppHpAfter}
           onHpAfterChange={setOppHpAfter}
-          hpMaxHp={selfActive.stats.h}
-          hpLabel={`自分の結果HP（命中前${Math.round(selfParticipant.currentHpPercent)}%）`}
+          hpMaxHp={selfDamageTarget.maxHp}
+          hpLabel={`${selfDamageTarget.name}${selfDamageTarget.isSwitchIn ? '（交代後）' : ''}の結果HP（命中前${Math.round(selfDamageTarget.hpPercent)}%）`}
           secondary={oppSecondary}
           onSecondaryChange={setOppSecondary}
           switchOptions={oppSwitchOptions}

@@ -222,6 +222,8 @@ export default function BattlePage() {
               oppParticipant={oppParticipant}
               liveBench={liveBench}
               remainingOpp={remainingOpp}
+              selfParticipantsById={battle.state.self}
+              oppParticipantsById={battle.state.opponent}
               onAdvance={(selfAction, oppAction, selfObserved, oppObserved) =>
                 battle.advanceTurn(bench, selfAction, oppAction, selfObserved, oppObserved)
               }
