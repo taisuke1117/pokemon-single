@@ -8,12 +8,12 @@
 import { PRNG, toID } from '@pkmn/sim';
 import { buildPayoffMatrix } from './matrix-builder';
 import { solveMatrix } from './solve';
-import { buildBattleFromSnapshot, type GtSideSnapshot, type GtMember } from './bridge/build-battle';
+import { buildBattleFromSnapshot, orderedMembers, type GtSideSnapshot, type GtMember } from './bridge/build-battle';
 import { applyRevealed, oppToCalc } from './bridge/battle-state-adapter';
 import { toResolvedBoard } from './eval/board-snapshot';
 import { evaluateBreakdown, type EvalBreakdown } from './eval/compose';
 import type { SnapshotArgs } from './chance-sampling';
-import type { BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../types';
+import type { BattleParticipant, BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../types';
 import { createBattleParticipant } from '../../types';
 import type { GtRecommendation } from './types';
 
@@ -58,6 +58,28 @@ function allocateExistProbabilities(candidates: OpponentSlot[], remaining: numbe
   return map;
 }
 
+/**
+ * 相手の技セットを選ぶ: 対戦中に実際に使用が確認された技(revealedMoveIds)を最優先で確定させ、
+ * 残りの枠を採用率(moveUsage、環境データは最大10件保持)降順で埋める。実際の技は4つまでしか
+ * 持てない(@pkmn/simの制約)ため、「どの4つを確定枠にするか」を技が判明するたびに更新していく。
+ * revealedMoveIdsはsim小文字ID表記、moveUsage[].moveIdは正式表記なのでtoIDで揃えて突き合わせる。
+ */
+function pickOppMoveIds(slot: OpponentSlot, participant: BattleParticipant): string[] {
+  const usageList = [...(slot.moveUsage ?? [])].sort((a, b) => b.usage - a.usage);
+  const revealedIds = participant.revealedMoveIds ?? [];
+  const confirmed: string[] = [];
+  for (const revealedId of revealedIds) {
+    const known = usageList.find((mu) => toID(mu.moveId) === toID(revealedId));
+    confirmed.push(known ? known.moveId : revealedId);
+  }
+  const remaining = 4 - confirmed.length;
+  if (remaining <= 0) return confirmed.slice(0, 4);
+  const rest = usageList
+    .map((m) => m.moveId)
+    .filter((id) => !confirmed.some((c) => toID(c) === toID(id)));
+  return [...confirmed, ...rest.slice(0, remaining)];
+}
+
 interface BuiltGtArgs {
   args: SnapshotArgs;
   notes: string[];
@@ -92,7 +114,9 @@ function buildGtArgs(input: GtEngineInput): BuiltGtArgs {
   const confirmedSlots = [...(activeSlot ? [activeSlot] : []), ...confirmedBench];
 
   const remaining = Math.max(0, TEAM_SIZE - confirmedSlots.length);
-  const maxCandidates = input.maxCandidateOpponents ?? 3;
+  // 相手は最大6枠まで入力可能。デフォルトを6にし、入力済み候補は基本的に全部行列に含める
+  // （残り枠が2でも「3位以下は無視」にはせず、種族入力済みの候補全体で存在確率を按分する）。
+  const maxCandidates = input.maxCandidateOpponents ?? 6;
   const allCandidates = opponents
     .filter((o) => o.species && !confirmedSlots.some((c) => c.id === o.id))
     .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999));
@@ -122,13 +146,14 @@ function buildGtArgs(input: GtEngineInput): BuiltGtArgs {
     if (!rawCalc) continue;
     // 判明済み情報（手動入力: 持ち物/特性/性格/努力値/テラスタイプ）があれば代表スプレッドより優先する
     const calc = applyRevealed(rawCalc, slot, state);
-    // 相手の技は採用率上位（moveUsage）を calc.moveIds に入れる
-    const moveIds = (slot.moveUsage ?? []).slice(0, 4).map((m) => m.moveId);
+    const participant = state.opponent[slot.id] ?? createBattleParticipant();
+    // 相手の技: 対戦中に判明済みの技(revealedMoveIds)を優先確定し、残り枠を採用率降順で埋める
+    const moveIds = pickOppMoveIds(slot, participant);
     oppMembers.push({
       refId: slot.id,
       displayName: slot.resolvedName ?? slot.query,
       calc: { ...calc, moveIds: moveIds.length ? moveIds : calc.moveIds },
-      participant: state.opponent[slot.id] ?? createBattleParticipant(),
+      participant,
     });
     existProbByRef.set(slot.id, existProbMap.get(slot.id) ?? 1);
   }
@@ -178,11 +203,22 @@ export function computeGameTheoryRecommendation(input: GtEngineInput): GtRecomme
   const activeOppSlot = opponents.find((o) => o.id === oppActiveRefId);
   const usageByMove = new Map<string, number>();
   for (const mu of activeOppSlot?.moveUsage ?? []) usageByMove.set(toID(mu.moveId), mu.usage);
+  // 対戦中に実際の使用が確認された技(revealedMoveIds)は採用率に関わらず確定済みなので最大重みにする。
+  const revealedMoveIdSet = new Set(
+    (input.state.opponent[oppActiveRefId]?.revealedMoveIds ?? []).map((id) => toID(id)),
+  );
   // 交代先の重みは、その個体が実際に選出に含まれている確率(existProbByRef)でスケールする
   // （未確定候補ほど「相手が本当にそこへ交代できる」可能性は低いとみなす）。
+  // switch.toIndexはorderedMembers済み配列上のインデックス（build-battle.ts参照）。
+  // args.opp.membersは並べ替え前の元順序なのでtoIndexで直接引くとactive自身を指してしまう。
+  const oppOrdered = orderedMembers(args.opp);
   const oppProbs = payoff.oppActions.map((a) => {
-    if (a.action.kind === 'move') return usageByMove.get(toID(a.action.moveId)) ?? 0.05;
-    const targetRefId = args.opp.members[a.action.toIndex]?.refId;
+    if (a.action.kind === 'move') {
+      const mid = toID(a.action.moveId);
+      if (revealedMoveIdSet.has(mid)) return 1;
+      return usageByMove.get(mid) ?? 0.05;
+    }
+    const targetRefId = oppOrdered[a.action.toIndex]?.refId;
     const existProb = targetRefId ? args.existProbByRef?.get(targetRefId) ?? 1 : 1;
     return 0.1 * existProb; // 交代のベースライン × 存在確率
   });

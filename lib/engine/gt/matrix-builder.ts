@@ -3,7 +3,7 @@
  * 合法手は seed非依存なので1つのBattleから列挙し、各セルはN回サンプリングで期待値を取る。
  */
 import { Dex } from '@pkmn/sim';
-import { buildBattleFromSnapshot } from './bridge/build-battle';
+import { buildBattleFromSnapshot, orderedMembers } from './bridge/build-battle';
 import { enumerateLegalActions, isForceSwitch } from './legal-moves';
 import { expectedCellValue, type SnapshotArgs, DEFAULT_SAMPLES } from './chance-sampling';
 import { moveJa } from '../../data/move-ja';
@@ -52,8 +52,13 @@ export function buildPayoffMatrix(args: SnapshotArgs, options?: MatrixBuildOptio
   if (selfActions.length === 0) selfActions = [{ kind: 'move', moveId: 'struggle' }];
   if (oppActions.length === 0) oppActions = [{ kind: 'move', moveId: 'struggle' }];
 
-  const selfBenchName = (i: number) => args.self.members[i]?.displayName ?? `控え${i + 1}`;
-  const oppBenchName = (i: number) => args.opp.members[i]?.displayName ?? `控え${i + 1}`;
+  // enumerateLegalActionsが返すswitch.toIndexは「activeが先頭に並べ替えられた配列」上のインデックス
+  // (build-battle.tsのorderedMembers参照)。args.self.members/args.opp.membersは並べ替え前の元順序なので、
+  // toIndexで直接引くとactive自身を指してしまい「今場に出ている個体に交代」という誤ったラベル・重み付けになる。
+  const selfOrdered = orderedMembers(args.self);
+  const oppOrdered = orderedMembers(args.opp);
+  const selfBenchName = (i: number) => selfOrdered[i]?.displayName ?? `控え${i + 1}`;
+  const oppBenchName = (i: number) => oppOrdered[i]?.displayName ?? `控え${i + 1}`;
   const selfLabels = selfActions.map((a) => labelFor(a, selfBenchName));
   const oppLabels = oppActions.map((a) => labelFor(a, oppBenchName));
 
@@ -70,7 +75,7 @@ export function buildPayoffMatrix(args: SnapshotArgs, options?: MatrixBuildOptio
     const moveColumnIndices = oppActions.map((a, idx) => (a.kind === 'move' ? idx : -1)).filter((idx) => idx >= 0);
     oppActions.forEach((action, j) => {
       if (action.kind !== 'switch') return;
-      const targetRefId = args.opp.members[action.toIndex]?.refId;
+      const targetRefId = oppOrdered[action.toIndex]?.refId;
       const p = targetRefId ? existProbByRef.get(targetRefId) : undefined;
       if (p === undefined || p >= 1) return;
       matrix.forEach((row) => {
