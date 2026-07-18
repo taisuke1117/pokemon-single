@@ -106,7 +106,9 @@ function SlotEditor({ seed, onSave }: { seed: PartyMemberSeed; onSave: (s: Party
     const q = moveQuery.trim().toLowerCase();
     const all = catalogEntry?.moves ?? [];
     const list = q ? all.filter((m) => m.toLowerCase().includes(q) || moveJa(m).includes(q)) : all;
-    return [...list].sort((a, b) => moveJa(a).localeCompare(moveJa(b), 'ja')).slice(0, 60);
+    // 覚える技が60種を超えるポケモンで、検索せずに一覧から選ぼうとすると61番目以降が
+    // 選択肢に出ず選べなくなっていたため上限を撤廃（技は多くても150前後、<select>で問題ない量）。
+    return [...list].sort((a, b) => moveJa(a).localeCompare(moveJa(b), 'ja'));
   }, [catalogEntry, moveQuery]);
 
   const speciesResults = useMemo(() => searchFullCatalog(speciesQuery, 10), [speciesQuery]);
