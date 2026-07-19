@@ -3,7 +3,7 @@
  * board.self/opp の active + bench 全員（実質「選出済み全員」）の状態を書き戻す。
  */
 import { createBattleParticipant } from '../../../types';
-import type { BattleFieldState, BattleParticipant, BattleState } from '../../../types';
+import type { BattleFieldState, BattleParticipant, BattleState, SideConditions } from '../../../types';
 import { SIM_TERRAIN_TO_APP, SIM_WEATHER_TO_APP } from '../sim-enum-map';
 import type { ResolvedBoard, ResolvedPokemon } from '../types';
 
@@ -58,14 +58,34 @@ function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | unde
   };
 }
 
+/**
+ * みらいよち/はめつのねがいのturnsRemainingを1ターン持ち越す。simから読み取れるのは
+ * 「このターン新規発動した(常にturnsRemaining:2)」か「何も無い(発動済み/未使用)」のどちらかだけなので、
+ * turnsRemaining:2→1のデクリメントはsimの状態を見ずアプリ側(前のBattleFieldState)で行う必要がある。
+ */
+function mergeFutureAttackPending(
+  next: SideConditions['futureAttackPending'],
+  prev: SideConditions['futureAttackPending'],
+): SideConditions['futureAttackPending'] {
+  if (next) return next;
+  if (prev && prev.turnsRemaining === 2) return { ...prev, turnsRemaining: 1 };
+  return undefined;
+}
+
 function toFieldPatch(board: ResolvedBoard, prevField: BattleFieldState): BattleFieldState {
   return {
     ...prevField,
     weather: board.field.weather ? SIM_WEATHER_TO_APP[board.field.weather] : undefined,
     terrain: board.field.terrain ? SIM_TERRAIN_TO_APP[board.field.terrain] : undefined,
     isTrickRoom: board.field.isTrickRoom,
-    selfSide: { ...board.self.side },
-    oppSide: { ...board.opp.side },
+    selfSide: {
+      ...board.self.side,
+      futureAttackPending: mergeFutureAttackPending(board.self.side.futureAttackPending, prevField.selfSide.futureAttackPending),
+    },
+    oppSide: {
+      ...board.opp.side,
+      futureAttackPending: mergeFutureAttackPending(board.opp.side.futureAttackPending, prevField.oppSide.futureAttackPending),
+    },
   };
 }
 

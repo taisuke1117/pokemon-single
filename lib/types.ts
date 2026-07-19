@@ -298,6 +298,19 @@ export interface SideConditions {
    * このアプリはPP管理を追跡していないため区別せず両方同じ扱いで良い(HP/状態異常の回復のみ再現)。
    */
   switchHealMoveId?: 'healingwish' | 'lunardance';
+  /**
+   * みらいよち/はめつのねがい: 使用したターンの2ターン後(残留処理)に、その時場にいる個体へ
+   * 確定ダメージが発動する予約。発動対象は「その時点でその側のactiveにいる個体」なので
+   * ねがいごとと対称に防御側のSideConditionsに持たせる。turnsRemaining=2は使用直後(まだsimには
+   * 注入しない、アプリ側カウンタのみ)、1になったら次のBattle再構築時にsimへ注入し次の残留処理で
+   * 確実に発動させる(ねがいごとのstartingTurn=-1ハックと同じ発想)。
+   */
+  futureAttackPending?: {
+    moveId: 'futuresight' | 'doomdesire';
+    turnsRemaining: 1 | 2;
+    /** 発動時のダメージ計算に使う攻撃側のrefId。 */
+    attackerRefId: string;
+  };
 }
 
 export function createSideConditions(): SideConditions {

@@ -25,4 +25,6 @@ export const WEIGHTS = {
   statusBench: 0.5,
   /** 今アクティブへの継続効果（混乱/やどりぎ/かなしばり/挑発/アンコール/バインド/はんどう等）。 */
   activeVolatile: 0.3,
+  /** みらいよち/はめつのねがいの発動予約（確定ダメージの期待値、turnsRemainingで割引）。 */
+  pendingAttack: 0.35,
 } as const;

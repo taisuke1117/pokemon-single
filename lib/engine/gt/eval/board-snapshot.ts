@@ -117,6 +117,17 @@ function toResolvedSideConditions(side: SimSide): ResolvedSideConditions {
     : side.slotConditions[0]?.['lunardance']
       ? 'lunardance'
       : undefined;
+  // みらいよち/はめつのねがい: GTエンジンが明示的に注入した予約(endingTurn=-1)はそのターンの
+  // 残留処理で即発動し消費されるため、この読み取り時点で残っているのは「simが技解決中に
+  // 自動生成した新規発動分」のみ。よって検出できた時点で常にturnsRemaining:2として扱ってよい
+  // （1→0への持ち越し・消費判定はアプリ側でboard-to-state.tsのmergeFutureAttackPendingが担う）。
+  const futuremove = side.slotConditions[0]?.['futuremove'] as
+    | { move?: string; source?: { set: { name: string } } }
+    | undefined;
+  const futureAttackPending =
+    futuremove?.move && futuremove.source && (futuremove.move === 'futuresight' || futuremove.move === 'doomdesire')
+      ? { moveId: futuremove.move as 'futuresight' | 'doomdesire', turnsRemaining: 2 as const, attackerRefId: futuremove.source.set.name }
+      : undefined;
   return {
     spikes: (sc['spikes']?.layers as number | undefined) ?? 0,
     isSR: Boolean(sc['stealthrock']),
@@ -126,6 +137,7 @@ function toResolvedSideConditions(side: SimSide): ResolvedSideConditions {
     isTailwind: Boolean(sc['tailwind']),
     wishHpPercent: wish?.hp && activeMaxHp ? Math.round((wish.hp / activeMaxHp) * 100) : undefined,
     switchHealMoveId,
+    futureAttackPending,
   };
 }
 

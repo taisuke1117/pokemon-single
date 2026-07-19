@@ -13,6 +13,7 @@ import { evalHazards } from './hazards';
 import { evalStatusBench } from './status-bench';
 import { evalWincon } from './wincon';
 import { evalActiveVolatile } from './active-volatile';
+import { evalPendingAttack } from './pending-attacks';
 // import { evalStructuralHoles } from './structural-holes'; // 発展: 最小版では未実装
 // import { evalInfoAdvantage } from './info-advantage';     // 発展: 最小版では未実装
 
@@ -25,6 +26,7 @@ export interface EvalBreakdown {
   statusBench: number;
   wincon: number;
   activeVolatile: number;
+  pendingAttack: number;
   total: number;
 }
 
@@ -39,8 +41,9 @@ export function evaluateBreakdown(board: ResolvedBoard): EvalBreakdown {
   const statusBench = evalStatusBench(board);
   const wincon = evalWincon(board);
   const activeVolatile = evalActiveVolatile(board);
-  const total = terminal + survival + facingThreat + safeSwitchIns + hazards + statusBench + wincon + activeVolatile;
-  return { terminal, survival, facingThreat, safeSwitchIns, hazards, statusBench, wincon, activeVolatile, total };
+  const pendingAttack = evalPendingAttack(board);
+  const total = terminal + survival + facingThreat + safeSwitchIns + hazards + statusBench + wincon + activeVolatile + pendingAttack;
+  return { terminal, survival, facingThreat, safeSwitchIns, hazards, statusBench, wincon, activeVolatile, pendingAttack, total };
 }
 
 /** 盤面のスカラー評価値（自分視点）。 */

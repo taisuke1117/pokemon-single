@@ -172,6 +172,38 @@ export function injectSideConditions(battle: Battle, side: SimSide, cond: SideCo
   if (cond.switchHealMoveId && active) {
     side.addSlotCondition(active, cond.switchHealMoveId, source);
   }
+
+  // みらいよち/はめつのねがい: turnsRemaining===2(使用直後)はまだsimへ注入しない
+  // (アプリ側カウンタのみで1ターン持ち越す)。turnsRemaining===1になった時点でのみ注入し、
+  // wishのstartingTurn=-1と同じ発想でendingTurnを強制し次の残留処理で確実に発動させる。
+  // 攻撃側(source相当)は防御側から見て相手サイドの該当個体を明示的に探す必要がある
+  // (技を撃った本人はその後交代している可能性があるため、side.active[0]決め打ちは不可)。
+  const pending = cond.futureAttackPending;
+  if (pending && pending.turnsRemaining === 1 && active) {
+    const attacker = side.foe.pokemon.find((m) => m.set.name === pending.attackerRefId);
+    const move = Dex.moves.get(pending.moveId);
+    if (attacker && move.exists) {
+      side.addSlotCondition(active, 'futuremove', source);
+      const state = side.slotConditions[0]?.['futuremove'] as
+        | { move?: string; source?: SimPokemon; moveData?: unknown; endingTurn?: number }
+        | undefined;
+      if (state) {
+        state.move = move.id;
+        state.source = attacker;
+        state.moveData = {
+          id: move.id,
+          name: move.name,
+          accuracy: move.accuracy,
+          basePower: move.basePower,
+          category: move.category,
+          priority: move.priority,
+          flags: move.flags,
+          type: move.type,
+        };
+        state.endingTurn = -1;
+      }
+    }
+  }
 }
 
 /** 天候/フィールド/トリックルームを注入する。source は任意の場の個体。 */
