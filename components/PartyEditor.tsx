@@ -13,7 +13,10 @@ import { abilityJa } from '@/lib/data/ability-ja';
 import { moveJa } from '@/lib/data/move-ja';
 import { TypeBadge } from './TypeBadge';
 import { PokemonSprite } from './PokemonSprite';
+import { SavedPartiesModal } from './party/SavedPartiesModal';
 import type { StatLine } from '@/lib/types';
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const STAT_FIELDS: { key: keyof StatLine; label: string }[] = [
   { key: 'h', label: 'H' },
@@ -27,7 +30,41 @@ const STAT_FIELDS: { key: keyof StatLine; label: string }[] = [
 export function PartyEditor({ onClose }: { onClose: () => void }) {
   const seeds = usePartyStore((s) => s.seeds);
   const setMember = usePartyStore((s) => s.setMember);
+  const partyName = usePartyStore((s) => s.partyName);
+  const currentPartyId = usePartyStore((s) => s.currentPartyId);
+  const setPartyName = usePartyStore((s) => s.setPartyName);
+  const markSavedAs = usePartyStore((s) => s.markSavedAs);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [savedModalOpen, setSavedModalOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  async function handleSave(mode: 'new' | 'overwrite') {
+    const name = partyName.trim();
+    if (!name) {
+      setSaveStatus('error');
+      setSaveError('パーティ名を入力してください');
+      return;
+    }
+    setSaveStatus('saving');
+    setSaveError(null);
+    try {
+      const url = mode === 'overwrite' && currentPartyId ? `/api/parties/${currentPartyId}` : '/api/parties';
+      const method = mode === 'overwrite' && currentPartyId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, seeds }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+      markSavedAs({ id: data.id, name: data.name });
+      setSaveStatus('saved');
+    } catch (e) {
+      setSaveStatus('error');
+      setSaveError(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   return (
     <div
@@ -38,18 +75,60 @@ export function PartyEditor({ onClose }: { onClose: () => void }) {
         className="flex max-h-[90vh] w-full max-w-4xl flex-col border border-hud-line bg-hud-panel shadow-glow"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-hud-line px-4 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-hud-line px-4 py-3">
           <h2 className="font-display text-lg font-bold uppercase tracking-wide text-hud-text">
             パーティ編集
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="font-mono text-xs text-hud-dim hover:text-hud-text"
-          >
-            閉じる ✕
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <input
+              value={partyName}
+              onChange={(e) => {
+                setPartyName(e.target.value);
+                setSaveStatus('idle');
+              }}
+              placeholder="パーティ名"
+              className="w-32 border border-hud-line bg-hud-panelAlt px-2 py-1 text-[11px] text-hud-text placeholder:text-hud-faint focus:border-hud-cyan/50 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setSavedModalOpen(true)}
+              className="rounded-sm border border-hud-line bg-hud-panelAlt px-2 py-1 font-mono text-[10px] text-hud-text transition hover:bg-hud-panel"
+            >
+              保存済みから読み込む
+            </button>
+            {currentPartyId && (
+              <button
+                type="button"
+                onClick={() => handleSave('overwrite')}
+                disabled={saveStatus === 'saving'}
+                className="rounded-sm border border-hud-line bg-hud-panelAlt px-2 py-1 font-mono text-[10px] text-hud-text transition hover:bg-hud-panel disabled:opacity-40"
+              >
+                上書き保存
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleSave('new')}
+              disabled={saveStatus === 'saving'}
+              className="rounded-sm border border-hud-cyan/50 bg-hud-cyan/10 px-2 py-1 font-mono text-[10px] font-semibold uppercase text-hud-cyan transition hover:bg-hud-cyan/20 disabled:opacity-40"
+            >
+              {saveStatus === 'saving' ? '保存中…' : saveStatus === 'saved' ? '保存しました' : '名前を付けて保存'}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="font-mono text-xs text-hud-dim hover:text-hud-text"
+            >
+              閉じる ✕
+            </button>
+          </div>
         </header>
+        {saveStatus === 'error' && saveError && (
+          <p className="border-b border-hud-line bg-hud-panelAlt px-4 py-1.5 font-mono text-[10px] text-advantage-mildRisk">
+            エラー: {saveError}
+          </p>
+        )}
+        {savedModalOpen && <SavedPartiesModal onClose={() => setSavedModalOpen(false)} />}
 
         <div className="flex gap-px overflow-x-auto bg-hud-line">
           {seeds.map((s, i) => (
