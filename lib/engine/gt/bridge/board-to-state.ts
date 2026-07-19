@@ -32,6 +32,25 @@ function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | unde
     // yawnActiveはtrappedと同様「今その状態か」に依存し毎ターン変わりうる
     // （眠りに落ちた/交代した時点でvolatile自体が消えundefinedへ戻る）ためフォールバックしない。
     yawnActive: mon.yawnActive,
+    // 以下も全てtrapped/yawnActiveと同様、simのvolatileが「今も存在するか」をそのまま反映する
+    // （解除された/交代した時点でboard側がundefinedを返すので、その通りbaseへフォールバックしない）。
+    confusionTurns: mon.confusionTurns,
+    encoreMoveId: mon.encoreMoveId,
+    encoreTurns: mon.encoreTurns,
+    tauntTurns: mon.tauntTurns,
+    disableMoveId: mon.disableMoveId,
+    disableTurns: mon.disableTurns,
+    leechSeedSourceSlot: mon.leechSeedSourceSlot,
+    partialTrapTurns: mon.partialTrapTurns,
+    partialTrapMoveId: mon.partialTrapMoveId,
+    mustRecharge: mon.mustRecharge,
+    protectStallCounter: mon.protectStallCounter,
+    stockpileLayers: mon.stockpileLayers,
+    minimizeActive: mon.minimizeActive,
+    aquaRingActive: mon.aquaRingActive,
+    // lastMoveIdは「直前に何か技を使った」という事実なので、フォールバックせずboard側の値を
+    // そのまま反映する（交代直後はboard側がundefinedを返すので、その通りクリアされるのが正しい）。
+    lastMoveId: mon.lastMoveId,
   };
 }
 

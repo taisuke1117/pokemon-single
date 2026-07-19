@@ -39,6 +39,19 @@ function toResolvedPokemon(
   const sub = mon.volatiles['substitute'] as unknown as { hp: number } | undefined;
   const choiceLock = mon.volatiles['choicelock'] as unknown as { move?: string } | undefined;
   const yawn = mon.volatiles['yawn'] as unknown as { duration?: number } | undefined;
+  // ここから下は「ターンをまたぐが毎ターンBattleを作り直す設計のため保存しないと消える」
+  // volatile群（あくびと同じ問題への対応、詳細は各フィールドのコメント参照）。
+  const confusion = mon.volatiles['confusion'] as unknown as { time?: number } | undefined;
+  const encore = mon.volatiles['encore'] as unknown as { move?: string; duration?: number } | undefined;
+  const taunt = mon.volatiles['taunt'] as unknown as { duration?: number } | undefined;
+  const disable = mon.volatiles['disable'] as unknown as { move?: string; duration?: number } | undefined;
+  const leechseed = mon.volatiles['leechseed'] as unknown as { sourceSlot?: string } | undefined;
+  const partialTrap = mon.volatiles['partiallytrapped'] as unknown as { duration?: number; sourceEffect?: { id?: string } } | undefined;
+  const mustRecharge = mon.volatiles['mustrecharge'] as unknown as object | undefined;
+  const stall = mon.volatiles['stall'] as unknown as { counter?: number } | undefined;
+  const stockpile = mon.volatiles['stockpile'] as unknown as { layers?: number } | undefined;
+  const minimize = mon.volatiles['minimize'] as unknown as object | undefined;
+  const aquaRing = mon.volatiles['aquaring'] as unknown as object | undefined;
   return {
     refId: mon.set.name,
     species: mon.species.name,
@@ -61,6 +74,21 @@ function toResolvedPokemon(
     // （こだわり系ロック中・ありじごく/くろいまなざし等で交代不可の場合 true）。
     trapped: mon.trapped === true ? true : undefined,
     yawnActive: yawn ? true : undefined,
+    confusionTurns: confusion?.time,
+    encoreMoveId: encore?.move,
+    encoreTurns: encore?.duration,
+    tauntTurns: taunt?.duration,
+    disableMoveId: disable?.move,
+    disableTurns: disable?.duration,
+    leechSeedSourceSlot: leechseed?.sourceSlot === 'p1a' || leechseed?.sourceSlot === 'p2a' ? leechseed.sourceSlot : undefined,
+    partialTrapTurns: partialTrap?.duration,
+    partialTrapMoveId: partialTrap?.sourceEffect?.id,
+    mustRecharge: mustRecharge ? true : undefined,
+    protectStallCounter: stall?.counter,
+    stockpileLayers: stockpile?.layers,
+    minimizeActive: minimize ? true : undefined,
+    aquaRingActive: aquaRing ? true : undefined,
+    lastMoveId: mon.lastMove?.id,
   };
 }
 

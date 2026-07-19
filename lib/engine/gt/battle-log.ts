@@ -100,6 +100,10 @@ export function parseTurnLog(logLines: string[], ctx: Ctx): TurnLogEvent[] {
             label = RESIDUAL_JA[abilityName] ?? abilityJa(abilityName);
           } else if (reason.startsWith('pokemon:')) {
             label = 'ばけのかわ';
+          } else if (reason.startsWith('move:')) {
+            // バインド技(ほのおのうず/やどりぎ以外)の継続ダメージ等、"[from] move: Fire Spin"形式。
+            const moveName = reason.replace(/^move:\s*/, '');
+            label = moveJa(moveName) || moveName;
           } else {
             label = RESIDUAL_JA[reason] ?? reason;
           }

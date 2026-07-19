@@ -207,6 +207,42 @@ export interface BattleParticipant {
    * 保存しないと次ターンのBattle再構築時に消えてしまう（trueならduration:1で再注入する）。
    */
   yawnActive?: boolean;
+  /**
+   * 以下は全て「ターンをまたいで持続するが、GTエンジンが毎ターンBattleを作り直す設計のため
+   * 保存しないと次ターンで消えてしまう」volatile状態群（あくび/化けの皮と同じ問題への対応）。
+   * sim内部の該当フィールド（duration/time/counter/layers等）をそのまま保持し、次ターンの
+   * Battle再構築時に同じ値で再注入する。sourceのような複雑なオブジェクト参照は保存しない。
+   */
+  /** 混乱の残りターン数（sim内部の`time`）。 */
+  confusionTurns?: number;
+  /** アンコールで固定されている技ID + 残りターン数。 */
+  encoreMoveId?: string;
+  encoreTurns?: number;
+  /** 挑発の残りターン数（変化技が使えない）。 */
+  tauntTurns?: number;
+  /** かなしばりで禁止されている技ID + 残りターン数。 */
+  disableMoveId?: string;
+  disableTurns?: number;
+  /** やどりぎのタネ: 種を吸われている側についているなら、吸い取る側のsimスロット('p1a'|'p2a')。 */
+  leechSeedSourceSlot?: 'p1a' | 'p2a';
+  /** ほのおのうず/ありじごく等バインド技の残りターン数 + 技ID（ログ表示・終了判定に必要）。 */
+  partialTrapTurns?: number;
+  partialTrapMoveId?: string;
+  /** はかいこうせん等、反動で次のターン動けない状態か。 */
+  mustRecharge?: boolean;
+  /** まもる/みきり等の連続成功でカウンタが増え成功率が下がる（sim内部の`counter`）。 */
+  protectStallCounter?: number;
+  /** 蓄えるの回数（1-3）。 */
+  stockpileLayers?: number;
+  /** 小さくなる済みか（永続、ダメージ倍率・回避率に影響）。 */
+  minimizeActive?: boolean;
+  /** アクアリング済みか（永続、毎ターン回復）。 */
+  aquaRingActive?: boolean;
+  /**
+   * 直前に使った技(sim小文字ID)。かなしばり(disable)がこれを参照して禁止技を決めるため、
+   * こちらも保存しないと次ターンのBattle再構築時に失われ、かなしばりが常に失敗してしまう。
+   */
+  lastMoveId?: string;
   /** 相手について、実際に使われたのを確認した技(moveId)。自分は常に手持ち4技全て使える。 */
   revealedMoveIds: string[];
   /** 判明した持ち物/特性/性格/努力値/テラスタイプ（手動入力）。設定されていれば代表スプレッドより優先する。 */

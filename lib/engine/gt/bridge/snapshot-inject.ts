@@ -5,6 +5,7 @@
  * 注意: 場のポケモン変更は必ず battle.actions.switchIn を使う（配列直接操作は slotConditions を壊す）。
  *       注入後は呼び出し側で必ず battle.makeRequest('move') を呼ぶこと（activeRequestがキャッシュされるため）。
  */
+import { Dex } from '@pkmn/sim';
 import type { Battle } from '@pkmn/sim';
 import type { BattleFieldState, BattleParticipant, SideConditions, StatKey } from '../../../types';
 
@@ -49,6 +50,14 @@ export function injectParticipantState(mon: SimPokemon, p: BattleParticipant): v
   if (Object.keys(boosts).length) mon.setBoost(boosts);
   if (p.status) mon.setStatus(p.status);
 
+  // 直前に使った技: かなしばり(disable)がpokemon.lastMove.idを参照するため、他のvolatile注入より
+  // 前に復元しておく（Dexから完全なMoveオブジェクトを取得して設定、ActiveMove固有の付随データ
+  // (hit数/累計ダメージ等)までは復元しないが、disable等が参照するidフィールドは共通して持つ）。
+  if (p.lastMoveId) {
+    const move = Dex.moves.get(p.lastMoveId);
+    if (move.exists) mon.lastMove = move as never;
+  }
+
   // 道具消費済み（きあいのタスキ/きのみ等）: 盤面から道具を除去し、再び1回きり効果が働かないようにする。
   if (p.itemConsumed) mon.item = '' as never;
 
@@ -62,6 +71,58 @@ export function injectParticipantState(mon: SimPokemon, p: BattleParticipant): v
   // 減っている値なので、次のBattle再構築後もこのターンの終わりに眠りになる=正しい2ターン仕様を維持する）。
   if (p.yawnActive) {
     mon.volatiles['yawn'] = { id: 'yawn', duration: 1 } as never;
+  }
+
+  // 以下も全てyawnと同じ理由（ターンをまたぐvolatileの再注入）。sourceのような複雑な
+  // オブジェクト参照は保存していないため、各effectが最低限必要とするフィールドのみ復元する。
+  if (p.confusionTurns && p.confusionTurns > 0) {
+    mon.volatiles['confusion'] = { id: 'confusion', time: p.confusionTurns } as never;
+  }
+  if (p.encoreMoveId && p.encoreTurns && p.encoreTurns > 0) {
+    mon.volatiles['encore'] = { id: 'encore', move: p.encoreMoveId, duration: p.encoreTurns } as never;
+  }
+  if (p.tauntTurns && p.tauntTurns > 0) {
+    mon.volatiles['taunt'] = { id: 'taunt', duration: p.tauntTurns } as never;
+  }
+  if (p.disableMoveId && p.disableTurns && p.disableTurns > 0) {
+    mon.volatiles['disable'] = { id: 'disable', move: p.disableMoveId, duration: p.disableTurns } as never;
+  }
+  if (p.leechSeedSourceSlot) {
+    mon.volatiles['leechseed'] = { id: 'leechseed', sourceSlot: p.leechSeedSourceSlot } as never;
+  }
+  if (p.partialTrapTurns && p.partialTrapTurns > 0) {
+    // partiallytrappedのresidual処理はsource(拘束した側の実Pokemonオブジェクト)と
+    // sourceEffect.idを内部で参照するため、最小構成{id,duration}だけだと例外で落ちる（実測確認済み）。
+    // シングルバトル固定なので「拘束した側」は常に相手側の現在のアクティブで一意に定まる。
+    // sourceEffectはDexから完全なMoveオブジェクトを引いて渡す（ログの技名表示にも使われるため、
+    // {id:'bind'}のような簡易オブジェクトだと-damageログの[from]部分が"undefined"になる実害があった）。
+    // boundDivisorはアイテム(ねばりのかぎづめ)条件までは再現せず、通常時のデフォルト値(8)で近似する。
+    const foeActive = mon.side.foe.active[0];
+    const bindMove = p.partialTrapMoveId ? Dex.moves.get(p.partialTrapMoveId) : undefined;
+    if (foeActive) {
+      mon.volatiles['partiallytrapped'] = {
+        id: 'partiallytrapped',
+        duration: p.partialTrapTurns,
+        source: foeActive,
+        sourceEffect: bindMove?.exists ? bindMove : { id: 'bind' },
+        boundDivisor: 8,
+      } as never;
+    }
+  }
+  if (p.mustRecharge) {
+    mon.volatiles['mustrecharge'] = { id: 'mustrecharge', duration: 2 } as never;
+  }
+  if (p.protectStallCounter && p.protectStallCounter > 1) {
+    mon.volatiles['stall'] = { id: 'stall', duration: 2, counter: p.protectStallCounter } as never;
+  }
+  if (p.stockpileLayers && p.stockpileLayers > 0) {
+    mon.volatiles['stockpile'] = { id: 'stockpile', layers: p.stockpileLayers, def: 0, spd: 0 } as never;
+  }
+  if (p.minimizeActive) {
+    mon.volatiles['minimize'] = { id: 'minimize' } as never;
+  }
+  if (p.aquaRingActive) {
+    mon.volatiles['aquaring'] = { id: 'aquaring' } as never;
   }
 
   // テラスタル/メガシンカ済み: @pkmn/sim の canTerastallize/canMegaEvo は Pokemon構築時に1回だけ

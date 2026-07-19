@@ -65,6 +65,33 @@ export interface ResolvedPokemon {
   teraActive?: boolean;
   /** あくびのvolatile(duration:1)が付いている＝次のターン終了時に眠りになる予約状態。 */
   yawnActive?: boolean;
+  /** 混乱の残りターン数。 */
+  confusionTurns?: number;
+  /** アンコールで固定されている技ID + 残りターン数。 */
+  encoreMoveId?: string;
+  encoreTurns?: number;
+  /** 挑発の残りターン数。 */
+  tauntTurns?: number;
+  /** かなしばりで禁止されている技ID + 残りターン数。 */
+  disableMoveId?: string;
+  disableTurns?: number;
+  /** やどりぎのタネ: 吸い取る側のsimスロット。 */
+  leechSeedSourceSlot?: 'p1a' | 'p2a';
+  /** バインド技の残りターン数 + 技ID。 */
+  partialTrapTurns?: number;
+  partialTrapMoveId?: string;
+  /** 反動で次のターン動けない状態か。 */
+  mustRecharge?: boolean;
+  /** まもる等の連続成功カウンタ。 */
+  protectStallCounter?: number;
+  /** 蓄えるの回数（1-3）。 */
+  stockpileLayers?: number;
+  /** 小さくなる済みか。 */
+  minimizeActive?: boolean;
+  /** アクアリング済みか。 */
+  aquaRingActive?: boolean;
+  /** 直前に使った技(sim小文字ID)。かなしばり(disable)がこれを参照するため保存が必要。 */
+  lastMoveId?: string;
 }
 
 export interface ResolvedSideConditions {
