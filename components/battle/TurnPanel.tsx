@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { moveJa } from '@/lib/data/move-ja';
+import { getCatalogEntry } from '@/lib/data/species-catalog';
 import { getMoveCategory } from '@/lib/engine/infer';
 import { HpValueInput } from './HpValueInput';
 import type { TurnActionSpec, TurnObservation } from '@/lib/engine/gt/bridge/apply-turn';
@@ -84,13 +85,24 @@ export function TurnPanel({
     const filtered = all.filter((m) => toID(m) === locked);
     return filtered.length > 0 ? filtered : all;
   }, [selfActive, selfParticipant.choiceLockedMoveId]);
+  // 環境データ(moveUsage)は採用率上位10件のみを保持しているため、それだけを選択肢にすると
+  // 相手が低採用率のマイナー技を実際に使ってきた場合に選べなくなる。そのポケモンが覚えられる
+  // 全習得技(species-catalog)も選択肢に加え、採用率データのある技を先頭（従来順）で維持する。
+  const oppAllMoveIds = useMemo(() => {
+    const usageMoves = [...new Set(oppActiveSlot.moveUsage?.map((m) => m.moveId) ?? [])];
+    const usageIds = new Set(usageMoves.map((m) => toID(m)));
+    const catalogMoves = oppActiveSlot.species ? getCatalogEntry(oppActiveSlot.species)?.moves ?? [] : [];
+    const rest = catalogMoves
+      .filter((m) => !usageIds.has(toID(m)))
+      .sort((a, b) => moveJa(a).localeCompare(moveJa(b), 'ja'));
+    return [...usageMoves, ...rest];
+  }, [oppActiveSlot]);
   const oppMoveOptions = useMemo(() => {
-    const all = [...new Set(oppActiveSlot.moveUsage?.map((m) => m.moveId) ?? [])];
     const locked = oppParticipant.choiceLockedMoveId;
-    if (!locked) return all;
-    const filtered = all.filter((m) => toID(m) === locked);
-    return filtered.length > 0 ? filtered : all;
-  }, [oppActiveSlot, oppParticipant.choiceLockedMoveId]);
+    if (!locked) return oppAllMoveIds;
+    const filtered = oppAllMoveIds.filter((m) => toID(m) === locked);
+    return filtered.length > 0 ? filtered : oppAllMoveIds;
+  }, [oppAllMoveIds, oppParticipant.choiceLockedMoveId]);
 
   // choiceLockedMoveId(sim小文字ID)に対応する正式表記の技名をmoveOptionsから逆引きする（表示用）。
   const selfLockedLabel = useMemo(() => {
@@ -102,9 +114,9 @@ export function TurnPanel({
   const oppLockedLabel = useMemo(() => {
     const locked = oppParticipant.choiceLockedMoveId;
     if (!locked) return undefined;
-    const match = (oppActiveSlot.moveUsage ?? []).find((m) => toID(m.moveId) === locked);
-    return moveJa(match?.moveId ?? locked);
-  }, [oppActiveSlot, oppParticipant.choiceLockedMoveId]);
+    const match = oppAllMoveIds.find((m) => toID(m) === locked);
+    return moveJa(match ?? locked);
+  }, [oppAllMoveIds, oppParticipant.choiceLockedMoveId]);
   const selfSwitchOptions: SwitchOption[] = liveBench.map((m) => ({ id: m.id, label: m.name }));
   const oppSwitchOptions: SwitchOption[] = remainingOpp.map((o) => ({ id: o.id, label: o.resolvedName ?? o.query }));
 

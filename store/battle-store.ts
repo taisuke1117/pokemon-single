@@ -243,7 +243,7 @@ export const useBattleStore = create<BattleStoreState>()(
 
       advanceTurn: (bench, selfAction, oppAction, selfObserved, oppObserved) => {
         const s = get();
-        const adapters = buildBattleSnapshotAdapters(s.state, bench, s.opponents);
+        const adapters = buildBattleSnapshotAdapters(s.state, bench, s.opponents, selfAction, oppAction);
         if (!adapters) {
           return { ok: false, error: '相手の型情報（種族・代表スプレッド）が不足しているため、ターンを進められません' };
         }

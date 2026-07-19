@@ -9,11 +9,11 @@ import { PRNG, toID } from '@pkmn/sim';
 import { buildPayoffMatrix } from './matrix-builder';
 import { solveMatrix } from './solve';
 import { buildBattleFromSnapshot, orderedMembers, type GtSideSnapshot, type GtMember } from './bridge/build-battle';
-import { applyRevealed, oppToCalc } from './bridge/battle-state-adapter';
+import { applyRevealed, oppToCalc, pickOppMoveIds } from './bridge/battle-state-adapter';
 import { toResolvedBoard } from './eval/board-snapshot';
 import { evaluateBreakdown, type EvalBreakdown } from './eval/compose';
 import type { SnapshotArgs } from './chance-sampling';
-import type { BattleParticipant, BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../types';
+import type { BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../types';
 import { createBattleParticipant } from '../../types';
 import type { GtRecommendation } from './types';
 
@@ -56,28 +56,6 @@ function allocateExistProbabilities(candidates: OpponentSlot[], remaining: numbe
     map.set(c.id, Math.min(1, raw));
   });
   return map;
-}
-
-/**
- * 相手の技セットを選ぶ: 対戦中に実際に使用が確認された技(revealedMoveIds)を最優先で確定させ、
- * 残りの枠を採用率(moveUsage、環境データは最大10件保持)降順で埋める。実際の技は4つまでしか
- * 持てない(@pkmn/simの制約)ため、「どの4つを確定枠にするか」を技が判明するたびに更新していく。
- * revealedMoveIdsはsim小文字ID表記、moveUsage[].moveIdは正式表記なのでtoIDで揃えて突き合わせる。
- */
-function pickOppMoveIds(slot: OpponentSlot, participant: BattleParticipant): string[] {
-  const usageList = [...(slot.moveUsage ?? [])].sort((a, b) => b.usage - a.usage);
-  const revealedIds = participant.revealedMoveIds ?? [];
-  const confirmed: string[] = [];
-  for (const revealedId of revealedIds) {
-    const known = usageList.find((mu) => toID(mu.moveId) === toID(revealedId));
-    confirmed.push(known ? known.moveId : revealedId);
-  }
-  const remaining = 4 - confirmed.length;
-  if (remaining <= 0) return confirmed.slice(0, 4);
-  const rest = usageList
-    .map((m) => m.moveId)
-    .filter((id) => !confirmed.some((c) => toID(c) === toID(id)));
-  return [...confirmed, ...rest.slice(0, remaining)];
 }
 
 interface BuiltGtArgs {

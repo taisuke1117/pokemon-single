@@ -6,10 +6,12 @@
  * ここは「実際に今その1手を @pkmn/sim で解決する」ための素の盤面組み立てなので、
  * 判明済み枠（今場に出ている or 対戦中に出たことがある）だけを渡す。
  */
+import { toID } from '@pkmn/sim';
 import { pickPrimarySpread, spreadToCalcSpec } from '../../matchup';
 import { createBattleParticipant } from '../../../types';
-import type { BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../../types';
+import type { BattleParticipant, BattleState, CalcSpec, OpponentSlot, PartyMember } from '../../../types';
 import type { GtMember, GtSideSnapshot } from './build-battle';
+import type { TurnActionSpec } from './apply-turn';
 
 export interface BattleSnapshotAdapters {
   self: GtSideSnapshot;
@@ -23,6 +25,32 @@ export function oppToCalc(slot: OpponentSlot): CalcSpec | undefined {
   const primary = pickPrimarySpread(slot);
   if (!primary) return undefined;
   return spreadToCalcSpec(slot.species, primary);
+}
+
+/**
+ * 相手の技セットを選ぶ: 今まさに選択しようとしている技(pendingMoveId、UIで新たに選んだ技)と
+ * 対戦中に実際に使用が確認された技(revealedMoveIds)を最優先で確定させ、残りの枠を
+ * 採用率(moveUsage、環境データは最大10件保持)降順で埋める。実際の技は4つまでしか
+ * 持てない(@pkmn/simの制約)ため、「どの4つを確定枠にするか」を技が判明するたびに更新していく。
+ * pendingMoveIdが無ければ、moveUsage上位10件に含まれない技(UIでは選べるが未確認の技)を
+ * ターン進行(applyTurn)時に選んでもsimに拒否される。
+ * revealedMoveIds/pendingMoveIdはsim小文字ID表記、moveUsage[].moveIdは正式表記なのでtoIDで揃える。
+ */
+export function pickOppMoveIds(slot: OpponentSlot, participant: BattleParticipant, pendingMoveId?: string): string[] {
+  const usageList = [...(slot.moveUsage ?? [])].sort((a, b) => b.usage - a.usage);
+  const priorityIds = pendingMoveId ? [pendingMoveId, ...(participant.revealedMoveIds ?? [])] : (participant.revealedMoveIds ?? []);
+  const confirmed: string[] = [];
+  for (const id of priorityIds) {
+    if (confirmed.some((c) => toID(c) === toID(id))) continue;
+    const known = usageList.find((mu) => toID(mu.moveId) === toID(id));
+    confirmed.push(known ? known.moveId : id);
+  }
+  const remaining = 4 - confirmed.length;
+  if (remaining <= 0) return confirmed.slice(0, 4);
+  const rest = usageList
+    .map((m) => m.moveId)
+    .filter((id) => !confirmed.some((c) => toID(c) === toID(id)));
+  return [...confirmed, ...rest.slice(0, remaining)];
 }
 
 /**
@@ -44,32 +72,49 @@ export function applyRevealed(calc: CalcSpec, slot: OpponentSlot, state: BattleS
   };
 }
 
-/** 選出済み自分3体・相手の判明済み枠が揃っていなければ undefined（呼び出し側でガードする）。 */
+/**
+ * 選出済み自分3体・相手の判明済み枠が揃っていなければ undefined（呼び出し側でガードする）。
+ * oppAction/selfActionが{kind:'move'}の場合、その技を確定枠として最優先で技リストに含める
+ * （UIでは採用率データに無い技も選べるが、含めないとsimがその技での選択を拒否するため）。
+ */
 export function buildBattleSnapshotAdapters(
   state: BattleState,
   bench: PartyMember[],
   opponents: OpponentSlot[],
+  selfAction?: TurnActionSpec,
+  oppAction?: TurnActionSpec,
 ): BattleSnapshotAdapters | undefined {
-  const selfMembers: GtMember[] = bench.map((m) => ({
-    refId: m.id,
-    displayName: m.name,
-    calc: m.calc,
-    participant: state.self[m.id] ?? createBattleParticipant(),
-  }));
+  const pendingSelfMoveId = selfAction?.kind === 'move' ? selfAction.moveId : undefined;
+  const selfMembers: GtMember[] = bench.map((m) => {
+    const calc = m.calc;
+    if (m.id !== state.selfActiveMemberId || !pendingSelfMoveId) {
+      return { refId: m.id, displayName: m.name, calc, participant: state.self[m.id] ?? createBattleParticipant() };
+    }
+    const moveIds = calc.moveIds ?? [];
+    const hasMove = moveIds.some((mv) => toID(mv) === toID(pendingSelfMoveId));
+    return {
+      refId: m.id,
+      displayName: m.name,
+      calc: hasMove ? calc : { ...calc, moveIds: [...moveIds.slice(0, 3), pendingSelfMoveId] },
+      participant: state.self[m.id] ?? createBattleParticipant(),
+    };
+  });
   if (selfMembers.length === 0) return undefined;
 
+  const pendingOppMoveId = oppAction?.kind === 'move' ? oppAction.moveId : undefined;
   const oppSlots = opponents.filter((o) => o.species && (o.seenInBattle || o.id === state.oppActiveSlotId));
   const oppMembers: GtMember[] = [];
   for (const slot of oppSlots) {
     const rawCalc = oppToCalc(slot);
     if (!rawCalc) continue;
     const calc = applyRevealed(rawCalc, slot, state);
-    const moveIds = (slot.moveUsage ?? []).slice(0, 4).map((m) => m.moveId);
+    const participant = state.opponent[slot.id] ?? createBattleParticipant();
+    const moveIds = pickOppMoveIds(slot, participant, slot.id === state.oppActiveSlotId ? pendingOppMoveId : undefined);
     oppMembers.push({
       refId: slot.id,
       displayName: slot.resolvedName ?? slot.query,
       calc: { ...calc, moveIds: moveIds.length ? moveIds : calc.moveIds },
-      participant: state.opponent[slot.id] ?? createBattleParticipant(),
+      participant,
     });
   }
   if (oppMembers.length === 0) return undefined;

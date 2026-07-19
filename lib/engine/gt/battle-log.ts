@@ -165,9 +165,14 @@ export function parseTurnLog(logLines: string[], ctx: Ctx): TurnLogEvent[] {
         break;
       }
       case '-activate': {
+        // "move: Protect"(まもる等)/"ability: ..."の両方がこのイベントを使う。
+        // プレフィックスで技名/特性名の日本語辞書を出し分ける（技側はabilityJaでは引けないため）。
         const t = parseIdent(parts[2], ctx);
-        const eff = (parts[3] ?? '').replace(/^ability:\s*/, '').replace(/^move:\s*/, '');
-        push('ability', `${t.name}: ${abilityJa(eff) || eff}`, t.side);
+        const raw = parts[3] ?? '';
+        const isMove = raw.startsWith('move:');
+        const eff = raw.replace(/^ability:\s*/, '').replace(/^move:\s*/, '');
+        const label = isMove ? moveJa(eff) || eff : abilityJa(eff) || eff;
+        push('ability', `${t.name}: ${label}`, t.side);
         break;
       }
       case '-sidestart': {
