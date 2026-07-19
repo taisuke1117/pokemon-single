@@ -38,6 +38,7 @@ function toResolvedPokemon(
   // 特殊状態を読み戻す（T-Spike/T1で注入した状態が1ターン解決後も反映されるように）。
   const sub = mon.volatiles['substitute'] as unknown as { hp: number } | undefined;
   const choiceLock = mon.volatiles['choicelock'] as unknown as { move?: string } | undefined;
+  const yawn = mon.volatiles['yawn'] as unknown as { duration?: number } | undefined;
   return {
     refId: mon.set.name,
     species: mon.species.name,
@@ -59,6 +60,7 @@ function toResolvedPokemon(
     // mon.trapped は makeRequest('move') 後に getMoveRequestData() 内で計算される
     // （こだわり系ロック中・ありじごく/くろいまなざし等で交代不可の場合 true）。
     trapped: mon.trapped === true ? true : undefined,
+    yawnActive: yawn ? true : undefined,
   };
 }
 

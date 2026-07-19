@@ -29,6 +29,9 @@ function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | unde
     // これにより次ターンの盤面構築(toPokemonSet)がメガ形態を正しく引き継げる（タスク#39の対応と対）。
     megaUsed: mon.megaActive || base.megaUsed,
     teraUsed: mon.teraActive || base.teraUsed,
+    // yawnActiveはtrappedと同様「今その状態か」に依存し毎ターン変わりうる
+    // （眠りに落ちた/交代した時点でvolatile自体が消えundefinedへ戻る）ためフォールバックしない。
+    yawnActive: mon.yawnActive,
   };
 }
 

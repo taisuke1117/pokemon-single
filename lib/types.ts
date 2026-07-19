@@ -201,6 +201,12 @@ export interface BattleParticipant {
   choiceLockedMoveId?: string;
   /** 交代不可（ありじごく/かげふみ/くろいまなざし等）。UIの控えボタン活性/非活性の表示用。 */
   trapped?: boolean;
+  /**
+   * あくびで「次のターン終了時に眠りになる」予約が付いている。@pkmn/simのyawn volatileは
+   * ターンをまたぐ効果だが、GTエンジンは毎ターンBattleを作り直す設計のため、この中間状態を
+   * 保存しないと次ターンのBattle再構築時に消えてしまう（trueならduration:1で再注入する）。
+   */
+  yawnActive?: boolean;
   /** 相手について、実際に使われたのを確認した技(moveId)。自分は常に手持ち4技全て使える。 */
   revealedMoveIds: string[];
   /** 判明した持ち物/特性/性格/努力値/テラスタイプ（手動入力）。設定されていれば代表スプレッドより優先する。 */

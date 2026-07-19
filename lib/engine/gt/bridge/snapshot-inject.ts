@@ -58,6 +58,12 @@ export function injectParticipantState(mon: SimPokemon, p: BattleParticipant): v
     mon.volatiles['substitute'] = { id: 'substitute', hp: subHp } as never;
   }
 
+  // あくび: duration:1で直接セットする（読み戻し時点で既にsim側のupkeepにより2→1まで
+  // 減っている値なので、次のBattle再構築後もこのターンの終わりに眠りになる=正しい2ターン仕様を維持する）。
+  if (p.yawnActive) {
+    mon.volatiles['yawn'] = { id: 'yawn', duration: 1 } as never;
+  }
+
   // テラスタル/メガシンカ済み: @pkmn/sim の canTerastallize/canMegaEvo は Pokemon構築時に1回だけ
   // 計算され、以後「実際に使ったか」を反映して自動更新されない（simの標準仕様）。ここで明示的に
   // falseへ上書きしないと、対戦中に既に使用済みでも合法手列挙に選択肢が出続けてしまう

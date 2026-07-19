@@ -63,6 +63,8 @@ export interface ResolvedPokemon {
   megaActive?: boolean;
   /** このターンにテラスタルした（mon.terastallized）。次ターンへ teraUsed として引き継ぐ判定に使う。 */
   teraActive?: boolean;
+  /** あくびのvolatile(duration:1)が付いている＝次のターン終了時に眠りになる予約状態。 */
+  yawnActive?: boolean;
 }
 
 export interface ResolvedSideConditions {
