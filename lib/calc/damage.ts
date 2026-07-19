@@ -27,6 +27,11 @@ export interface PokemonSpec {
   status?: 'brn' | 'par' | 'psn' | 'tox' | 'slp' | 'frz';
   /** 現在HP%（0-100）。対戦中の実HPを反映したKO判定に使う。省略時は満タン扱い。 */
   currentHpPercent?: number;
+  /**
+   * みずびたし/リフレクタイプ等でタイプが変化している場合の上書き。未指定ならspeciesの
+   * 本来のタイプのまま（@smogon/calcはコンストラクタにtypesを渡せないため構築後に直接代入する）。
+   */
+  types?: [string] | [string, string];
 }
 
 export interface DamageResult {
@@ -46,7 +51,11 @@ export interface DamageResult {
 }
 
 function toPokemon(spec: PokemonSpec): Pokemon {
-  const base = new Pokemon(gen, spec.species, {
+  // types直接代入は@smogon/calc内部のcalculate()がdefender.clone()を経由するため反映されない
+  // （clone()はoverrides:this.speciesのみ引き継ぎ、後付けのtypes代入はコンストラクタを通らないと
+  // 失われる。実測確認済み）。overridesオプション（species定義への差分マージ）で渡すことで、
+  // clone()を経ても正しく引き継がれる。
+  const options = {
     level: spec.level ?? 50,
     item: spec.item,
     ability: spec.ability,
@@ -56,21 +65,12 @@ function toPokemon(spec: PokemonSpec): Pokemon {
     boosts: spec.boosts,
     teraType: spec.teraType as never,
     status: spec.status,
-  });
+    overrides: spec.types ? ({ types: spec.types } as never) : undefined,
+  };
+  const base = new Pokemon(gen, spec.species, options);
   if (spec.currentHpPercent === undefined || spec.currentHpPercent >= 100) return base;
   const curHP = Math.max(1, Math.round((base.maxHP() * spec.currentHpPercent) / 100));
-  return new Pokemon(gen, spec.species, {
-    level: spec.level ?? 50,
-    item: spec.item,
-    ability: spec.ability,
-    nature: spec.nature,
-    evs: spec.evs,
-    ivs: spec.ivs,
-    boosts: spec.boosts,
-    teraType: spec.teraType as never,
-    status: spec.status,
-    curHP,
-  });
+  return new Pokemon(gen, spec.species, { ...options, curHP });
 }
 
 /** 設置技・壁・追い風など、場の片側1面分の状態。 */

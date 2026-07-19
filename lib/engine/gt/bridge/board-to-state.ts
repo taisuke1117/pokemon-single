@@ -51,6 +51,10 @@ function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | unde
     // lastMoveIdは「直前に何か技を使った」という事実なので、フォールバックせずboard側の値を
     // そのまま反映する（交代直後はboard側がundefinedを返すので、その通りクリアされるのが正しい）。
     lastMoveId: mon.lastMoveId,
+    // abilityOverride/typesOverrideも同様に「今実際にどうなっているか」をそのまま反映する
+    // （トレースは相手の交代のたびに対象が変わりうるため、フォールバックすると古い値が残ってしまう）。
+    abilityOverride: mon.currentAbilityId,
+    typesOverride: mon.typesOverride,
   };
 }
 

@@ -44,13 +44,17 @@ export function toSpec(mon: ResolvedPokemon): PokemonSpec {
   return {
     species: mon.calc.species,
     item: mon.itemConsumed ? undefined : mon.calc.itemId,
-    ability: mon.calc.abilityId,
+    // トレース/なりきり等で特性が変化していればそちらを優先する（currentAbilityIdはsim小文字ID、
+    // ability自体は@smogon/calcが正式表記・小文字IDどちらでも解決できる想定）。
+    ability: mon.currentAbilityId ?? mon.calc.abilityId,
     nature: mon.calc.natureId,
     evs: toStatsTableEvs(mon.calc.evs),
     teraType: mon.calc.teraTypeId,
     status: mon.status ? STATUS_MAP[mon.status] : undefined,
     boosts,
     currentHpPercent: mon.hpPercent,
+    // みずびたし/リフレクタイプ等でタイプが変化していればそちらを優先する。
+    types: mon.typesOverride && mon.typesOverride.length > 0 ? (mon.typesOverride as [string] | [string, string]) : undefined,
   };
 }
 

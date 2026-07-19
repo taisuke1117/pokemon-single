@@ -92,6 +92,13 @@ export interface ResolvedPokemon {
   aquaRingActive?: boolean;
   /** 直前に使った技(sim小文字ID)。かなしばり(disable)がこれを参照するため保存が必要。 */
   lastMoveId?: string;
+  /**
+   * トレース/なりきり/なかまづくり/スキルスワップ/シンプルビーム/うるさいタネ等で元のcalc.abilityId
+   * から変化した場合の、今現在の実際の特性(sim小文字ID)。元のままなら未指定。
+   */
+  currentAbilityId?: string;
+  /** みずびたし/リフレクタイプ等でタイプが変化した場合の、今現在の実際のタイプ一覧。元のままなら未指定。 */
+  typesOverride?: string[];
 }
 
 export interface ResolvedSideConditions {

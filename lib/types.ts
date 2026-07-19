@@ -243,6 +243,19 @@ export interface BattleParticipant {
    * こちらも保存しないと次ターンのBattle再構築時に失われ、かなしばりが常に失敗してしまう。
    */
   lastMoveId?: string;
+  /**
+   * トレース/なりきり/なかまづくり/スキルスワップ/シンプルビーム/うるさいタネ等で元の特性
+   * (calc.abilityId)から変化した場合の、今現在の実際の特性(sim小文字ID)。未指定なら元の特性のまま。
+   * これも保存しないと次ターンのBattle再構築時にcalc.abilityIdへ巻き戻ってしまう。
+   */
+  abilityOverride?: string;
+  /**
+   * みずびたし/リフレクタイプ/へんげんじざい(発動時)等でタイプが変化した場合の、今現在の実際の
+   * タイプ一覧。未指定なら元の種族タイプのまま。abilityOverrideと同じ理由で保存する。
+   * simの内部タイプ表記(ResolvedPokemon.typesと同じ、"Water"等の英語)をそのまま保持する
+   * （PokeType型はUI表示用の日本語対応型でここでは扱わない）。
+   */
+  typesOverride?: string[];
   /** 相手について、実際に使われたのを確認した技(moveId)。自分は常に手持ち4技全て使える。 */
   revealedMoveIds: string[];
   /** 判明した持ち物/特性/性格/努力値/テラスタイプ（手動入力）。設定されていれば代表スプレッドより優先する。 */

@@ -4,6 +4,7 @@
  * この1回の変換を挟むことで、各評価要素関数が @pkmn/sim を一切importせず純粋関数になる
  * （オラクル盤面テストが書きやすくなる）。selfSideId で「どちらが自分か」を指定する。
  */
+import { Dex, toID } from '@pkmn/sim';
 import type { Battle } from '@pkmn/sim';
 import type { CalcSpec, StatKey } from '../../../types';
 import type { ResolvedBoard, ResolvedPokemon, ResolvedSideConditions } from '../types';
@@ -52,6 +53,16 @@ function toResolvedPokemon(
   const stockpile = mon.volatiles['stockpile'] as unknown as { layers?: number } | undefined;
   const minimize = mon.volatiles['minimize'] as unknown as object | undefined;
   const aquaRing = mon.volatiles['aquaring'] as unknown as object | undefined;
+  // トレース/なりきり/なかまづくり/スキルスワップ/シンプルビーム/うるさいタネ等で元のcalc.abilityId
+  // から実際の特性(mon.ability)が変わっていれば記録する（次ターンへ引き継ぐため）。
+  // @smogon/calc(ダメージ計算)のabilityオプションは正式表記のみ解決できる(toIDのような正規化を
+  // 行わない、実測確認済み)ため、sim小文字IDのmon.abilityではなくDexで正式表記に変換して保持する。
+  const currentAbilityId =
+    calc.abilityId && toID(calc.abilityId) !== mon.ability ? Dex.abilities.get(mon.ability).name : undefined;
+  // みずびたし/リフレクタイプ等で本来のタイプ(mon.species.types)と現在のタイプ(mon.types)が
+  // 異なっていれば記録する（同上）。
+  const baseTypes = mon.species.types;
+  const typesChanged = mon.types.length !== baseTypes.length || mon.types.some((t, i) => t !== baseTypes[i]);
   return {
     refId: mon.set.name,
     species: mon.species.name,
@@ -89,6 +100,8 @@ function toResolvedPokemon(
     minimizeActive: minimize ? true : undefined,
     aquaRingActive: aquaRing ? true : undefined,
     lastMoveId: mon.lastMove?.id,
+    currentAbilityId,
+    typesOverride: typesChanged ? [...mon.types] : undefined,
   };
 }
 

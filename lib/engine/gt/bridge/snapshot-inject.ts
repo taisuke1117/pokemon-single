@@ -125,6 +125,16 @@ export function injectParticipantState(mon: SimPokemon, p: BattleParticipant): v
     mon.volatiles['aquaring'] = { id: 'aquaring' } as never;
   }
 
+  // トレース/なりきり/なかまづくり/スキルスワップ/シンプルビーム/うるさいタネ等で元の特性から
+  // 変化している場合、Battle再構築のたびに元のcalc.abilityIdへ巻き戻らないよう明示的に再設定する。
+  if (p.abilityOverride) {
+    mon.setAbility(p.abilityOverride);
+  }
+  // みずびたし/リフレクタイプ等でタイプが変化している場合も同様に再設定する。
+  if (p.typesOverride && p.typesOverride.length > 0) {
+    mon.setType(p.typesOverride);
+  }
+
   // テラスタル/メガシンカ済み: @pkmn/sim の canTerastallize/canMegaEvo は Pokemon構築時に1回だけ
   // 計算され、以後「実際に使ったか」を反映して自動更新されない（simの標準仕様）。ここで明示的に
   // falseへ上書きしないと、対戦中に既に使用済みでも合法手列挙に選択肢が出続けてしまう
