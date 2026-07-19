@@ -20,6 +20,12 @@ export interface TurnLogEvent {
   kind: TurnLogKind;
   /** 日本語の1行テキスト。 */
   text: string;
+  /**
+   * 特性発動イベント(kind:'ability')の場合、実際に発動した特性の正式表記ID(例:"Intimidate")。
+   * これを見た側(self/opp)の対戦相手の特性が確定するため、advanceTurn側でrevealedAbilityIdへ
+   * 自動反映する（技のrevealedMoveIdsと同じパターン）。
+   */
+  abilityId?: string;
 }
 
 const STATUS_JA: Record<string, string> = {
@@ -34,7 +40,7 @@ const STAT_JA: Record<string, string> = {
   atk: '攻撃', def: '防御', spa: '特攻', spd: '特防', spe: '素早さ', accuracy: '命中', evasion: '回避',
 };
 const WEATHER_JA: Record<string, string> = {
-  Sandstorm: '砂嵐', 'Sunny Day': '晴れ', RainDance: '雨', Rain: '雨', Snow: 'あられ', Hail: 'あられ', SunnyDay: '晴れ', desolateland: '大日照',
+  Sandstorm: '砂嵐', 'Sunny Day': '晴れ', RainDance: '雨', Rain: '雨', Snow: 'ゆき', Snowscape: 'ゆき', Hail: 'あられ', SunnyDay: '晴れ', desolateland: '大日照',
 };
 const RESIDUAL_JA: Record<string, string> = {
   psn: 'どく', tox: 'もうどく', brn: 'やけど', Sandstorm: '砂嵐', Hail: 'あられ', 'Leech Seed': 'やどりぎ', 'Salt Cure': 'しおづけ', Curse: 'のろい',
@@ -68,7 +74,8 @@ function hpText(hp: string): string {
 export function parseTurnLog(logLines: string[], ctx: Ctx): TurnLogEvent[] {
   const events: TurnLogEvent[] = [];
   let prevRaw = '';
-  const push = (kind: TurnLogKind, text: string, side?: 'self' | 'opp') => events.push({ turn: ctx.turn, kind, text, side });
+  const push = (kind: TurnLogKind, text: string, side?: 'self' | 'opp', abilityId?: string) =>
+    events.push({ turn: ctx.turn, kind, text, side, abilityId });
 
   for (const raw of logLines) {
     if (!raw.startsWith('|')) continue;
@@ -144,7 +151,13 @@ export function parseTurnLog(logLines: string[], ctx: Ctx): TurnLogEvent[] {
         const w = WEATHER_JA[parts[2]] ?? parts[2];
         if (parts.includes('[upkeep]')) break; // 継続表示はうるさいので省略
         const reason = fromReason(parts);
-        push('weather', reason ? `天候が${w}になった` : `${w}が発生`, undefined);
+        // ゆきふらし/すなおこし等、特性由来で天候が変わった場合は発動元(ability:)の特性が
+        // 確定するため、advanceTurn側でrevealedAbilityIdへ自動反映できるようabilityIdも運ぶ。
+        // reasonの発動元側(who)はparts[4]の"[of] p1a: ..."/"[from] ability: ..."からp1/p2で判定する。
+        const ofSeg = parts.find((p) => p.startsWith('[of]'));
+        const who = ofSeg ? (ofSeg.includes('p1') ? 'self' : 'opp') : undefined;
+        const abilityId = reason?.startsWith('ability:') ? reason.replace(/^ability:\s*/, '') : undefined;
+        push('weather', reason ? `天候が${w}になった` : `${w}が発生`, who, abilityId);
         break;
       }
       case 'switch':
@@ -176,7 +189,15 @@ export function parseTurnLog(logLines: string[], ctx: Ctx): TurnLogEvent[] {
         const isMove = raw.startsWith('move:');
         const eff = raw.replace(/^ability:\s*/, '').replace(/^move:\s*/, '');
         const label = isMove ? moveJa(eff) || eff : abilityJa(eff) || eff;
-        push('ability', `${t.name}: ${label}`, t.side);
+        push('ability', `${t.name}: ${label}`, t.side, isMove ? undefined : eff);
+        break;
+      }
+      case '-ability': {
+        // いかく等、発動を明示的に通知する特性(this.add('-ability', pokemon, 'Intimidate', ...))。
+        // 対象自身の特性が確定するため、abilityIdをそのまま運ぶ(既に正式表記なのでabilityJaへ直渡し)。
+        const t = parseIdent(parts[2], ctx);
+        const abilityName = parts[3] ?? '';
+        push('ability', `${t.name}: ${abilityJa(abilityName) || abilityName}が発動`, t.side, abilityName);
         break;
       }
       case '-sidestart': {

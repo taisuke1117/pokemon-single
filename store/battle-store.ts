@@ -299,6 +299,18 @@ export const useBattleStore = create<BattleStoreState>()(
           }
         }
 
+        // 対戦中に相手の特性発動(いかく/ゆきふらし等)が確認できたら、判明済みとして自動記録する
+        // （revealedMoveIdsと同じ発想）。自分の特性は既にPartyMember.calc.abilityIdで確定済みのため
+        // 対象外。手動入力(OpponentRevealForm)を優先し、既に判明済みなら上書きしない。
+        for (const ev of result.log) {
+          if (ev.kind !== 'ability' || ev.side !== 'opp' || !ev.abilityId) continue;
+          const oppRefId = patch.oppActiveSlotId;
+          const oppP = patch.opponent[oppRefId];
+          if (oppP && !oppP.revealedAbilityId) {
+            patch.opponent[oppRefId] = { ...oppP, revealedAbilityId: ev.abilityId };
+          }
+        }
+
         // 相手が交代した場合は、実際に場に出た枠として確定させる（既存switchInOppと同じ意図）。
         const nextOpponents =
           oppAction.kind === 'switch'
