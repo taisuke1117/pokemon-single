@@ -9,7 +9,7 @@ import type { ResolvedBoard, ResolvedPokemon } from '../types';
 
 const VALID_STATUS = new Set(['brn', 'par', 'psn', 'tox', 'slp', 'frz']);
 
-function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | undefined): BattleParticipant {
+export function toParticipantPatch(mon: ResolvedPokemon, prev: BattleParticipant | undefined): BattleParticipant {
   const base = prev ?? createBattleParticipant();
   return {
     ...base,
@@ -72,7 +72,7 @@ function mergeFutureAttackPending(
   return undefined;
 }
 
-function toFieldPatch(board: ResolvedBoard, prevField: BattleFieldState): BattleFieldState {
+export function toFieldPatch(board: ResolvedBoard, prevField: BattleFieldState): BattleFieldState {
   return {
     ...prevField,
     weather: board.field.weather ? SIM_WEATHER_TO_APP[board.field.weather] : undefined,

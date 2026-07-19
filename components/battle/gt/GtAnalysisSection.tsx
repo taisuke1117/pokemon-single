@@ -20,6 +20,7 @@ export function GtAnalysisSection({
   const [rec, setRec] = useState<GtRecommendation | null>(null);
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState<string | null>(null);
+  const [deepen, setDeepen] = useState(false);
 
   async function handleCompute() {
     setStatus('loading');
@@ -28,7 +29,7 @@ export function GtAnalysisSection({
       const res = await fetch('/api/gt-matrix', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ state, bench, opponents }),
+        body: JSON.stringify({ state, bench, opponents, depth: deepen ? 2 : 1 }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
@@ -51,20 +52,33 @@ export function GtAnalysisSection({
             利得行列 × ナッシュ均衡
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleCompute}
-          disabled={status === 'loading'}
-          className="rounded-sm border border-hud-cyan/50 bg-hud-cyan/10 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-hud-cyan transition hover:bg-hud-cyan/20 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {status === 'loading' ? '計算中…（数秒）' : rec ? '再計算' : '行列を計算'}
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wide text-hud-faint">
+            <input
+              type="checkbox"
+              checked={deepen}
+              onChange={(e) => setDeepen(e.target.checked)}
+              className="h-3 w-3 accent-hud-cyan"
+            />
+            2ターン先読み
+          </label>
+          <button
+            type="button"
+            onClick={handleCompute}
+            disabled={status === 'loading'}
+            className="rounded-sm border border-hud-cyan/50 bg-hud-cyan/10 px-3 py-1.5 font-mono text-[11px] font-semibold uppercase tracking-wide text-hud-cyan transition hover:bg-hud-cyan/20 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {status === 'loading' ? (deepen ? '計算中…（十数秒）' : '計算中…（数秒）') : rec ? '再計算' : '行列を計算'}
+          </button>
+        </div>
       </header>
 
       <div className="p-3">
         {status === 'loading' && (
           <p className="font-mono text-[11px] text-hud-cyan">
-            全手ペアをシミュレーションで解決中… 相手の型はサンプリングで平均しています。
+            {deepen
+              ? '各手ペアの先で、次ターンの利得行列を再帰的に解いています… 通常より時間がかかります。'
+              : '全手ペアをシミュレーションで解決中… 相手の型はサンプリングで平均しています。'}
           </p>
         )}
         {error && <p className="font-mono text-[11px] text-advantage-mildRisk">エラー: {error}</p>}

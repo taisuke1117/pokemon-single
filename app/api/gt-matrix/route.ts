@@ -11,6 +11,8 @@ interface GtMatrixRequestBody {
   bench: PartyMember[];
   opponents: OpponentSlot[];
   samples?: number;
+  /** 先読み段数。省略時1。2で2ターン先読み(計算に数秒〜十数秒余分にかかる)。 */
+  depth?: number;
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -24,6 +26,7 @@ export async function POST(req: Request): Promise<Response> {
       bench: body.bench,
       opponents: body.opponents,
       samples: body.samples,
+      depth: body.depth,
     });
     return Response.json(rec);
   } catch (e) {

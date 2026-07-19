@@ -27,6 +27,12 @@ export interface GtEngineInput {
   samples?: number;
   /** 相手の残り枠のうち、未確定候補として追加で取り込む最大数（省略時3）。 */
   maxCandidateOpponents?: number;
+  /**
+   * 先読み段数。既定1(現状の静的評価のみ、後方互換)。2で「次ターンの利得行列を再帰的に解いた値」
+   * をセル評価に使う(多段階先読み)。3以上は同期API(Vercel 30秒制限)では非現実的なため
+   * computeGameTheoryRecommendation側で2に丸める。
+   */
+  depth?: number;
 }
 
 /** チャンピオンズの選出数（固定3体）。相手の「まだ判明していない残り枠」の推定に使う。 */
@@ -174,7 +180,12 @@ export function computeGameTheoryRecommendation(input: GtEngineInput): GtRecomme
   const { args, notes, oppActiveRefId, opponents } = buildGtArgs(input);
 
   // --- 行列構築 ---
-  const payoff = buildPayoffMatrix(args, { samples: input.samples });
+  // depth>=3は同期API(30秒制限)では非現実的と実測確認済み(計画書参照)なので2に丸める。
+  const depth = input.depth ? Math.min(2, Math.max(1, input.depth)) : 1;
+  const payoff = buildPayoffMatrix(args, { samples: input.samples, depth, pruneOwnActions: false });
+  if (depth >= 2) {
+    notes.push(`2ターン先読み(depth=${payoff.depthReached})で計算しています。近似の枝刈りを行っているため、1手読みと僅かに傾向が異なる場合があります`);
+  }
 
   // --- 相手モデル（最適応答用の列分布）: 相手activeの技採用率を列に対応づける ---
   // env側moveIdは正式表記("Play Rough")、GtActionはsim小文字ID("playrough")なのでtoIDで揃える。
