@@ -12,6 +12,7 @@ const BREAKDOWN_LABELS: { key: keyof Omit<EvalBreakdown, 'total'>; label: string
   { key: 'hazards', label: '設置物' },
   { key: 'statusBench', label: '状態異常' },
   { key: 'wincon', label: '勝ち筋' },
+  { key: 'activeVolatile', label: '混乱/拘束等' },
 ];
 
 function scoreLabel(total: number): { text: string; className: string } {

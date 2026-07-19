@@ -23,4 +23,6 @@ export const WEIGHTS = {
   hazards: 0.6,
   /** 状態異常（控えの将来価値）。 */
   statusBench: 0.5,
+  /** 今アクティブへの継続効果（混乱/やどりぎ/かなしばり/挑発/アンコール/バインド/はんどう等）。 */
+  activeVolatile: 0.3,
 } as const;
