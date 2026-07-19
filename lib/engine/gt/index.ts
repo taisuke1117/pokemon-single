@@ -125,6 +125,7 @@ function buildGtArgs(input: GtEngineInput): BuiltGtArgs {
 
   const oppMembers: GtMember[] = [];
   const existProbByRef = new Map<string, number>();
+  const moveExistProbByRef = new Map<string, Map<string, number>>();
   for (const slot of orderedSlots) {
     const rawCalc = oppToCalc(slot);
     if (!rawCalc) continue;
@@ -140,6 +141,19 @@ function buildGtArgs(input: GtEngineInput): BuiltGtArgs {
       participant,
     });
     existProbByRef.set(slot.id, existProbMap.get(slot.id) ?? 1);
+
+    // 採用率で埋めただけの技(判明済みではない)は、実際にその個体が持っている確信度が
+    // 採用率程度しかない。matrix-builder.tsの技存在確率ブレンドに使う（存在しないかもしれない
+    // 1手にナッシュ均衡の確率が集中してしまう問題への対応）。
+    const revealedSet = new Set((participant.revealedMoveIds ?? []).map((id) => toID(id)));
+    const usageByMoveId = new Map((slot.moveUsage ?? []).map((mu) => [toID(mu.moveId), mu.usage]));
+    const moveProbMap = new Map<string, number>();
+    for (const moveId of moveIds) {
+      const simId = toID(moveId);
+      if (revealedSet.has(simId)) continue;
+      moveProbMap.set(simId, usageByMoveId.get(simId) ?? 0.05);
+    }
+    if (moveProbMap.size > 0) moveExistProbByRef.set(slot.id, moveProbMap);
   }
 
   if (selfMembers.length === 0 || oppMembers.length === 0) {
@@ -161,7 +175,7 @@ function buildGtArgs(input: GtEngineInput): BuiltGtArgs {
   // 自分は常に確定済み(存在確率1)。相手は confirmed=1 / candidate=推定値 を existProbByRef に反映済み。
   for (const m of selfMembers) existProbByRef.set(m.refId, 1);
 
-  const args: SnapshotArgs = { self, opp, field: state.field, calcByRef, existProbByRef };
+  const args: SnapshotArgs = { self, opp, field: state.field, calcByRef, existProbByRef, moveExistProbByRef };
   return { args, notes, oppActiveRefId, opponents };
 }
 

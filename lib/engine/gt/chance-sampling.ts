@@ -24,6 +24,13 @@ export interface SnapshotArgs {
   calcByRef: Map<string, CalcSpec>;
   /** refId → 選出に実際に含まれている確率(0-1)。省略時は全て1として扱われる。 */
   existProbByRef?: Map<string, number>;
+  /**
+   * refId → (技ID(sim小文字ID) → その個体が実際にその技を持っている確率0-1)。
+   * pickOppMoveIdsが「採用率上位で残り枠を埋めた」技は、実際にその個体が持っているとは限らない
+   * (判明済み技(revealedMoveIds)のみ確実)。省略時、またはマップに無い技は全て1(確実に持っている)
+   * として扱われる。自分の技は常に確定情報なので通常設定不要。
+   */
+  moveExistProbByRef?: Map<string, Map<string, number>>;
 }
 
 /**

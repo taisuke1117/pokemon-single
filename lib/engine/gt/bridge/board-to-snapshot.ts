@@ -44,5 +44,9 @@ export function boardToSnapshotArgs(board: ResolvedBoard, prevArgs: SnapshotArgs
     field: toFieldPatch(board, prevArgs.field),
     calcByRef,
     existProbByRef,
+    // moveExistProbByRefは技の確信度(採用率)なので、1シミュレーション内では
+    // calcByRefと同じくprevArgsからそのまま引き継ぐ(交代しても個体ごとのマップなので
+    // 該当refIdのエントリは自然に維持される)。
+    moveExistProbByRef: prevArgs.moveExistProbByRef,
   };
 }

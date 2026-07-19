@@ -158,6 +158,31 @@ export function buildPayoffMatrix(
     });
   }
 
+  // 相手の技のうち、判明済み(revealedMoveIds)ではなく採用率で残り枠を埋めただけの技
+  // (pickOppMoveIds参照)は、その個体が実際にその技を持っている確信度が採用率程度しかない。
+  // 上記の交代先ブレンドと同じ発想で、「その技を持っていなかった場合」の代替値
+  // (=他の技列の平均。技を持っていなければ相手は他の技を使うはず、という近似)とブレンドする。
+  // これをしないと、たまたま採用率が低い技が自分に対して極端に有効だった場合、ナッシュ均衡が
+  // 「相手は確実にその技を持っている」という前提で計算され、実際には存在しないかもしれない
+  // その1手にほぼ全ての確率を割り当ててしまう（合理的でない挙動、実測で報告・修正）。
+  const moveExistProbMap = args.moveExistProbByRef?.get(args.opp.activeRefId);
+  if (moveExistProbMap) {
+    oppActions.forEach((action, j) => {
+      if (action.kind !== 'move') return;
+      const p = moveExistProbMap.get(action.moveId);
+      if (p === undefined || p >= 1) return;
+      const otherMoveIndices = oppActions
+        .map((a2, j2) => (a2.kind === 'move' && j2 !== j ? j2 : -1))
+        .filter((j2) => j2 >= 0);
+      matrix.forEach((row) => {
+        const fallback = otherMoveIndices.length
+          ? otherMoveIndices.reduce((sum, j2) => sum + row[j2], 0) / otherMoveIndices.length
+          : row[j];
+        row[j] = p * row[j] + (1 - p) * fallback;
+      });
+    });
+  }
+
   return {
     selfActions: selfLabels,
     oppActions: oppLabels,
