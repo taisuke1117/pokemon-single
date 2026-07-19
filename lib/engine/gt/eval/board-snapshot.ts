@@ -107,6 +107,16 @@ function toResolvedPokemon(
 
 function toResolvedSideConditions(side: SimSide): ResolvedSideConditions {
   const sc = side.sideConditions;
+  // ねがいごとはPokemon個体ではなくside.slotConditions（ダブル用の複数ポジション概念、
+  // シングルバトルでは[0]のみ意味を持つ）に保存される。hpは発動時に固定される回復量(実数値)
+  // なので、%換算するにはactive個体の最大HPが必要（maxhp未確定=枠が空なら換算できず無視）。
+  const wish = side.slotConditions[0]?.['wish'] as unknown as { hp?: number } | undefined;
+  const activeMaxHp = side.active[0]?.maxhp;
+  const switchHealMoveId = side.slotConditions[0]?.['healingwish']
+    ? 'healingwish'
+    : side.slotConditions[0]?.['lunardance']
+      ? 'lunardance'
+      : undefined;
   return {
     spikes: (sc['spikes']?.layers as number | undefined) ?? 0,
     isSR: Boolean(sc['stealthrock']),
@@ -114,6 +124,8 @@ function toResolvedSideConditions(side: SimSide): ResolvedSideConditions {
     isLightScreen: Boolean(sc['lightscreen']),
     isAuroraVeil: Boolean(sc['auroraveil']),
     isTailwind: Boolean(sc['tailwind']),
+    wishHpPercent: wish?.hp && activeMaxHp ? Math.round((wish.hp / activeMaxHp) * 100) : undefined,
+    switchHealMoveId,
   };
 }
 

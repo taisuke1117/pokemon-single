@@ -284,6 +284,20 @@ export interface SideConditions {
   isLightScreen: boolean;
   isAuroraVeil: boolean;
   isTailwind: boolean;
+  /**
+   * ねがいごと(Wish): 次のターン終了時に、その時場にいる個体をwishHpPercent(発動時の使用者
+   * maxHPの50%を%換算した値)だけ回復する予約。Pokemon個体ではなくサイド(場)に紐づく状態なので
+   * ここに持たせる。@pkmn/simのside.slotConditionsは絶対ターン番号(getOverflowedTurnCount)で
+   * 発動判定するため、毎ターンBattleを作り直す設計では保存しないと消える（あくびと同根の問題）。
+   */
+  wishHpPercent?: number;
+  /**
+   * いやしのねがい/げつのひかり: 使用者は即座に瀕死になり(selfdestruct:"ifHit")、次にその側で
+   * 場に出た個体をonSwitchInで全回復(げつのひかりはPPも全回復)する予約。wishと同じくPokemon個体
+   * ではなくサイドに紐づくslotConditionのため、ここに保存する。げつのひかりはPP回復も伴うが、
+   * このアプリはPP管理を追跡していないため区別せず両方同じ扱いで良い(HP/状態異常の回復のみ再現)。
+   */
+  switchHealMoveId?: 'healingwish' | 'lunardance';
 }
 
 export function createSideConditions(): SideConditions {

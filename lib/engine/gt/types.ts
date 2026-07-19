@@ -108,6 +108,10 @@ export interface ResolvedSideConditions {
   isLightScreen: boolean;
   isAuroraVeil: boolean;
   isTailwind: boolean;
+  /** ねがいごとの回復予約（次のターン終了時に発動、%表記）。無ければ未指定。 */
+  wishHpPercent?: number;
+  /** いやしのねがい/げつのひかりの全回復予約（次に場に出た個体に発動）。無ければ未指定。 */
+  switchHealMoveId?: 'healingwish' | 'lunardance';
 }
 
 export interface ResolvedBoard {

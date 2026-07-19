@@ -151,6 +151,27 @@ export function injectSideConditions(battle: Battle, side: SimSide, cond: SideCo
   if (cond.isLightScreen) side.addSideCondition('lightscreen', source);
   if (cond.isAuroraVeil) side.addSideCondition('auroraveil', source);
   if (cond.isTailwind) side.addSideCondition('tailwind', source);
+
+  // ねがいごと: Pokemon個体ではなくside.slotConditions(ダブル用の複数ポジション概念、シングルでは
+  // [0]のみ)に保存される。@pkmn/simは絶対ターン番号(getOverflowedTurnCount)で発動判定するが、
+  // 毎ターンBattleを作り直す設計では新しいBattleのturnは常に1から始まるため、startingTurnを
+  // 「現在のturnより前」の値(-1)に固定すれば、次のresidual処理で確実に発動する
+  // （あくびのduration:1固定と同じ発想）。
+  const active = side.active[0];
+  if (cond.wishHpPercent && active) {
+    side.addSlotCondition(active, 'wish', source);
+    const state = side.slotConditions[0]?.['wish'] as unknown as { hp?: number; startingTurn?: number } | undefined;
+    if (state) {
+      state.hp = Math.max(1, Math.round((active.maxhp * cond.wishHpPercent) / 100));
+      state.startingTurn = -1;
+    }
+  }
+
+  // いやしのねがい/げつのひかり: wishと違いresidualではなくonSwitchIn契機で発動するため
+  // startingTurnの調整は不要（addSlotConditionするだけで次の交代時に効く）。
+  if (cond.switchHealMoveId && active) {
+    side.addSlotCondition(active, cond.switchHealMoveId, source);
+  }
 }
 
 /** 天候/フィールド/トリックルームを注入する。source は任意の場の個体。 */
