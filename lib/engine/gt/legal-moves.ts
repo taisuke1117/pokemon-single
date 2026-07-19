@@ -20,14 +20,14 @@ interface SwitchSlotData {
   active?: boolean;
   condition?: string;
 }
-interface MoveRequest {
+export interface MoveRequest {
   active?: MoveRequestSlot[];
   forceSwitch?: boolean[];
   side: { pokemon: SwitchSlotData[] };
 }
 
 /** request側データから、場に出せる控え(生存・非active)のインデックスを列挙する。 */
-function switchableIndices(req: MoveRequest): number[] {
+export function switchableIndices(req: MoveRequest): number[] {
   const out: number[] = [];
   req.side.pokemon.forEach((p, i) => {
     if (!p.active && p.condition !== '0 fnt') out.push(i);

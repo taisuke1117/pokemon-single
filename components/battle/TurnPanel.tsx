@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { moveJa } from '@/lib/data/move-ja';
 import { getCatalogEntry } from '@/lib/data/species-catalog';
+import { isSelfSwitchMove } from '@/lib/data/self-switch-moves';
 import { getMoveCategory } from '@/lib/engine/infer';
 import { HpValueInput } from './HpValueInput';
 import type { TurnActionSpec, TurnObservation } from '@/lib/engine/gt/bridge/apply-turn';
@@ -65,6 +66,7 @@ export function TurnPanel({
   const [selfSecondary, setSelfSecondary] = useState<'unknown' | 'yes' | 'no'>('unknown');
   const [selfSwitchToId, setSelfSwitchToId] = useState('');
   const [selfMega, setSelfMega] = useState(false);
+  const [selfSwitchOutToId, setSelfSwitchOutToId] = useState('');
 
   const [oppType, setOppType] = useState<'move' | 'switch'>('move');
   const [oppMoveId, setOppMoveId] = useState('');
@@ -73,6 +75,7 @@ export function TurnPanel({
   const [oppSecondary, setOppSecondary] = useState<'unknown' | 'yes' | 'no'>('unknown');
   const [oppSwitchToId, setOppSwitchToId] = useState('');
   const [oppMega, setOppMega] = useState(false);
+  const [oppSwitchOutToId, setOppSwitchOutToId] = useState('');
 
   const [message, setMessage] = useState<{ text: string; isError: boolean } | undefined>();
 
@@ -163,26 +166,42 @@ export function TurnPanel({
     setSelfSecondary('unknown');
     setSelfSwitchToId('');
     setSelfMega(false);
+    setSelfSwitchOutToId('');
     setOppType('move');
     setOppMoveId('');
     setOppCrit(false);
     setOppSecondary('unknown');
     setOppSwitchToId('');
     setOppMega(false);
+    setOppSwitchOutToId('');
   }
 
   function handleConfirm() {
+    const selfNeedsSwitchOut = selfType === 'move' && Boolean(selfMoveId) && isSelfSwitchMove(selfMoveId);
+    const oppNeedsSwitchOut = oppType === 'move' && Boolean(oppMoveId) && isSelfSwitchMove(oppMoveId);
     const selfAction: TurnActionSpec | undefined =
       selfType === 'move'
-        ? (selfMoveId ? { kind: 'move', moveId: selfMoveId, mega: selfMega || undefined } : undefined)
+        ? (selfMoveId
+            ? { kind: 'move', moveId: selfMoveId, mega: selfMega || undefined, switchOutToRefId: selfNeedsSwitchOut ? selfSwitchOutToId || undefined : undefined }
+            : undefined)
         : selfSwitchToId ? { kind: 'switch', toRefId: selfSwitchToId } : undefined;
     const oppAction: TurnActionSpec | undefined =
       oppType === 'move'
-        ? (oppMoveId ? { kind: 'move', moveId: oppMoveId, mega: oppMega || undefined } : undefined)
+        ? (oppMoveId
+            ? { kind: 'move', moveId: oppMoveId, mega: oppMega || undefined, switchOutToRefId: oppNeedsSwitchOut ? oppSwitchOutToId || undefined : undefined }
+            : undefined)
         : oppSwitchToId ? { kind: 'switch', toRefId: oppSwitchToId } : undefined;
 
     if (!selfAction || !oppAction) {
       setMessage({ text: '両者の行動を選択してください（技を選ぶか、交代先を選んでください）', isError: true });
+      return;
+    }
+    if (selfNeedsSwitchOut && !selfSwitchOutToId) {
+      setMessage({ text: '命中後の交代先を選択してください', isError: true });
+      return;
+    }
+    if (oppNeedsSwitchOut && !oppSwitchOutToId) {
+      setMessage({ text: '相手側の命中後の交代先を選択してください', isError: true });
       return;
     }
 
@@ -237,6 +256,9 @@ export function TurnPanel({
           showMegaOption={Boolean(selfActive.isMega) && !selfParticipant.megaUsed}
           mega={selfMega}
           onMegaChange={setSelfMega}
+          switchOutOptions={selfSwitchOptions}
+          switchOutToId={selfSwitchOutToId}
+          onSwitchOutToIdChange={setSelfSwitchOutToId}
         />
         <SideBlock
           testIdPrefix="opp"
@@ -263,6 +285,9 @@ export function TurnPanel({
           showMegaOption={!oppParticipant.megaUsed}
           mega={oppMega}
           onMegaChange={setOppMega}
+          switchOutOptions={oppSwitchOptions}
+          switchOutToId={oppSwitchOutToId}
+          onSwitchOutToIdChange={setOppSwitchOutToId}
         />
       </div>
 
@@ -307,6 +332,9 @@ function SideBlock({
   showMegaOption,
   mega,
   onMegaChange,
+  switchOutOptions,
+  switchOutToId,
+  onSwitchOutToIdChange,
 }: {
   label: string;
   accent: 'cyan' | 'amber';
@@ -335,8 +363,13 @@ function SideBlock({
   showMegaOption?: boolean;
   mega: boolean;
   onMegaChange: (v: boolean) => void;
+  /** とんぼがえり/ボルトチェンジ等命中後の交代先候補（switchOptionsと同じ生存中の控え一覧）。 */
+  switchOutOptions: SwitchOption[];
+  switchOutToId: string;
+  onSwitchOutToIdChange: (v: string) => void;
 }) {
   const accentClass = accent === 'cyan' ? 'border-hud-cyan/40' : 'border-hud-amber/40';
+  const needsSwitchOut = actionType === 'move' && Boolean(moveId) && isSelfSwitchMove(moveId);
   return (
     <div className={`border ${accentClass} bg-hud-panelAlt p-2.5`}>
       <div className="flex items-center justify-between">
@@ -427,8 +460,28 @@ function SideBlock({
               </label>
             </div>
           )}
-          {moveId && getMoveCategory(moveId) === 'Status' && (
+          {moveId && getMoveCategory(moveId) === 'Status' && !needsSwitchOut && (
             <p className="text-[10px] text-hud-faint">変化技のため結果HPの入力は不要です</p>
+          )}
+
+          {needsSwitchOut && (
+            <label className="flex flex-col gap-1">
+              <span className="text-[9px] uppercase tracking-wide text-hud-amber">命中後の交代先（この技は必ず控えへ交代します）</span>
+              <select
+                data-testid={`${testIdPrefix}-switchout-select`}
+                value={switchOutToId}
+                onChange={(e) => onSwitchOutToIdChange(e.target.value)}
+                className="border border-hud-line bg-hud-panel px-2 py-1.5 text-[12px] text-hud-text focus:border-hud-cyan/50 focus:outline-none"
+              >
+                <option value="">交代先を選択</option>
+                {switchOutOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {switchOutOptions.length === 0 && <p className="text-[10px] text-hud-faint">交代できる控えがいません</p>}
+            </label>
           )}
         </div>
       ) : (

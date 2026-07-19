@@ -9,7 +9,7 @@
 import { PRNG } from '@pkmn/sim';
 import { buildBattleFromSnapshot, orderedMembers, type GtSideSnapshot } from './build-battle';
 import { toResolvedBoard } from '../eval/board-snapshot';
-import { actionToChoice } from '../legal-moves';
+import { actionToChoice, switchableIndices, type MoveRequest } from '../legal-moves';
 import { GuidedPRNG, type GuidedObservations } from './guided-prng';
 import { parseTurnLog, type TurnLogEvent } from '../battle-log';
 import type { BattleFieldState, CalcSpec } from '../../../types';
@@ -20,9 +20,12 @@ import type { GtAction, ResolvedBoard } from '../types';
  * 交代は「どのrefIdに交代するか」で指定し、内部で orderedMembers を使って toIndex に変換する。
  * mega は技を使う場合のみ指定可能。terastallize はこの対戦環境では使用しないため対象外
  * （legal-moves.ts の enumerateLegalActions も意図的にテラス選択肢を列挙しない）。
+ * switchOutToRefId は「とんぼがえり/ボルトチェンジ等(selfSwitch技)を使った場合、命中後に
+ * どの控えへ交代するか」。simは技解決後に追加のswitchリクエストを出すため、これが無いと
+ * ダメージは発生するが交代自体が完了しないまま処理が終わってしまう（実測確認済みのバグ対応）。
  */
 export type TurnActionSpec =
-  | { kind: 'move'; moveId: string; mega?: boolean }
+  | { kind: 'move'; moveId: string; mega?: boolean; switchOutToRefId?: string }
   | { kind: 'switch'; toRefId: string };
 
 function toGtAction(spec: TurnActionSpec, snap: GtSideSnapshot): GtAction {
@@ -98,7 +101,31 @@ export function applyTurn(input: ApplyTurnInput): TurnResolution {
 
   const okSelf = battle.choose('p1', actionToChoice(toGtAction(input.selfAction, input.self)));
   const okOpp = battle.choose('p2', actionToChoice(toGtAction(input.oppAction, input.opp)));
-  const warning = !okSelf || !okOpp ? '一部の行動が@pkmn/simに受理されませんでした（盤面は可能な範囲で更新しています）' : undefined;
+
+  // selfSwitch技(ボルトチェンジ/とんぼがえり等)が命中すると、simは技解決後に追加の交代選択を
+  // 要求する(side.requestStateが'switch'になる)。これに応答しないと、ダメージは発生するのに
+  // 場のポケモンは入れ替わらないまま処理が終わってしまう（実測確認済みのバグ対応）。
+  // 交代先(switchOutToRefId)の指定が無い場合は、放置するとBattleが未解決のまま残るため
+  // 生存中の先頭の控えへ自動交代する（呼び出し側でUIから明示指定するのが本来の使い方）。
+  const resolvePendingSwitch = (sideId: 'p1' | 'p2', action: TurnActionSpec, snap: GtSideSnapshot): boolean => {
+    const side = battle[sideId];
+    if (side.requestState !== 'switch') return true;
+    const req = side.activeRequest as MoveRequest | null;
+    if (!req) return true;
+    const refId = action.kind === 'move' ? action.switchOutToRefId : undefined;
+    const ordered = orderedMembers(snap);
+    let toIndex = refId ? ordered.findIndex((m) => m.refId === refId) : -1;
+    if (toIndex < 0) toIndex = switchableIndices(req)[0] ?? -1;
+    if (toIndex < 0) return true; // 交代できる控えがいない(全滅寸前等)ならそのまま
+    return battle.choose(sideId, `switch ${toIndex + 1}`);
+  };
+  const okSelfSwitch = resolvePendingSwitch('p1', input.selfAction, input.self);
+  const okOppSwitch = resolvePendingSwitch('p2', input.oppAction, input.opp);
+
+  const warning =
+    !okSelf || !okOpp || !okSelfSwitch || !okOppSwitch
+      ? '一部の行動が@pkmn/simに受理されませんでした（盤面は可能な範囲で更新しています）'
+      : undefined;
 
   const board = toResolvedBoard(battle, 'p1', input.calcByRef, input.existProbByRef);
 
